@@ -40,16 +40,16 @@ func connectToNetwork(ip net.IP, port int, texts chan string) {
 		fmt.Println("Initializing your iwn network on port %d", port)
 	}
 
+	inCh := make(chan string)
+	//go broadcaster/receiver with texts and one channel to which it will listen and all the channel to output
+
 	ln, _ := net.Listen("tcp", ":"+string(port))
 	defer ln.Close()
 
-	//go broadcaster/receiver with texts and one channel to which it will listen and all the channel to output
-
 	for {
 		conn, _ := ln.Accept()
-		sendCh := make(chan string)
-		inCh := make(chan string)
-		handleConn(conn, sendCh, inCh)
+		sendCh := createAndAddChannel()
+		go handleConn(conn, sendCh, inCh)
 	}
 
 }
