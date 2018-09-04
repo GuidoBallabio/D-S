@@ -5,12 +5,16 @@ import (
 	"net"
 )
 
+var connArray = []net.Conn
+var messages = map[string]bool
+
 func main() {
 	ip, port := askPeer()
-
-	var texts = make(chan string)
-	go connectToNetwork(ip, port, texts)
-	go chat(texts)
+	var writeCh = make(chan string)
+	var listenCh = make(chan string)
+	go connectToNetwork(ip, port, listenCh)
+	go print(writech, listenCh)
+	go write(writeCh)
 }
 
 func askPeer() (ip net.IP, port int) {
@@ -31,7 +35,7 @@ func connect(ip net.IP, port int) (net.Conn, error) {
 	return net.Dial("tcp", ip.String()+":"+string(port))
 }
 
-func connectToNetwork(ip net.IP, port int, texts chan string) {
+func connectToNetwork(ip net.IP, port int, listenCh chan string) {
 	conn1, err := connect(ip, port)
 	if err != nil {
 		fmt.Println("Connection to the network Succesfull")
@@ -40,20 +44,57 @@ func connectToNetwork(ip net.IP, port int, texts chan string) {
 		fmt.Println("Initializing your iwn network on port %d", port)
 	}
 
+	go handleConn(conn1, handleConn)
+
 	ln, _ := net.Listen("tcp", ":"+string(port))
 	defer ln.Close()
 
-	//go broadcaster/receiver with texts and one channel to which it will listen and all the channel to output
-
 	for {
 		conn, _ := ln.Accept()
-		sendCh := make(chan string)
-		inCh := make(chan string)
-		handleConn(conn, sendCh, inCh)
+		go handleConn(conn, listenCh)
 	}
 
 }
 
-func chat(texts chan string) {
+func broadcast(msg string){
+	for _, conn := range connArray {
+		fmt.Fprintf(conn, msg)
+	}
+}
 
+func print(writeCh chan string, listenCh chan string) {
+	for {
+		select {
+		case msg := <-writeCh:
+			broadcast(msg)
+		case msg := <-listenCh:
+			if val, found := messages[msg]; val && found {
+				fmt.Println(msg)
+				broadcast(msg)
+			}
+		}
+	
+		messages[msg] = true
+	}
+}
+
+func write(writeCh chan string){
+	var msg string
+	for{
+		fmt.Scanln(&msg)
+		writeCh<-msg
+	}
+}
+
+func handleConn(conn net.Conn, listenCh chan string){
+	defer conn.Close()
+	for {
+		msg, err := bufio.NewReader(conn).ReadString('\n')
+		if (err != nil) {
+			fmt.Println("Error: " + err.Error())
+			return
+		} else {
+			listenCh<-msg
+		}
+	}
 }
