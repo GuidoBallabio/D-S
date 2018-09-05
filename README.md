@@ -1,9 +1,9 @@
 # Distributed Systems and Security
 
-## P2P chat room
+## Exercise 2.3 
+Implement a toy peer-to-peer network.
 
-Exercise 2.3 (implement a toy peer-to-peer network) This exercise asks
-you to program in Go a toy example of a peer-to-peer flooding network for send-
+This exercise asks you to program in Go a toy example of a peer-to-peer flooding network for send-
 ing strings around. The peer-to-peer network should then be used to build a
 distributed chat room. The chat room client should work as follows:
 
