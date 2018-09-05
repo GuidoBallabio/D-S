@@ -10,7 +10,7 @@ type AtomicMap struct {
 	rwLock sync.RWMutex
 }
 
-// NewAtomicMap is the constructor of the AtmoicMap type, it just creates an empty synchronized map
+// NewAtomicMap is the constructor of the AtomicMap type, it just creates an empty synchronized map
 func NewAtomicMap() *AtomicMap {
 	var amap AtomicMap
 	amap.data = make(map[string]bool)

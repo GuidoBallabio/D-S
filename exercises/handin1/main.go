@@ -2,13 +2,16 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 
 	"./lib"
 )
 
-var connArray = make(map[net.Conn]bool)
+const DEFAULT_PORT int = 4444
+
+var connArray = lib.NewAtomicSlice()
 var messages = lib.NewAtomicMap()
 
 func main() {
@@ -23,10 +26,8 @@ func main() {
 	<-quitCh
 }
 
-func askPeer() (net.IP, int) {
+func askPeer() (ip net.IP, port string) {
 	var temp string
-	var ip net.IP
-	var port int
 
 	fmt.Println("Enter IP address:")
 	fmt.Scanln(&temp)
@@ -34,27 +35,58 @@ func askPeer() (net.IP, int) {
 	ip = net.ParseIP(temp)
 
 	fmt.Println("Enter port:")
-	fmt.Scanf("%d", &port)
+	fmt.Scanln(&port)
+
+	if false { //remove
+		fmt.Printf("Not valid port, using default port %d\n", DEFAULT_PORT)
+		//port = DEFAULT_PORT
+	}
 
 	return ip, port
 }
 
-func connect(ip net.IP, port int) (net.Conn, error) {
-	return net.Dial("tcp", ip.String()+":"+string(port))
+func connect(ip net.IP, port string) (net.Conn, error) {
+	if ip == nil {
+		return nil, errors.New("IP is not valid")
+	}
+	return net.Dial("tcp", ip.String()+":"+port)
 }
 
-func connectToNetwork(ip net.IP, port int, listenCh chan string, quitCh chan struct{}) {
+func getLocalIP() net.IP {
+	netInterfaceAddresses, err := net.InterfaceAddrs()
+
+	if err != nil {
+		return nil
+	}
+
+	for _, netInterfaceAddress := range netInterfaceAddresses {
+
+		networkIP, ok := netInterfaceAddress.(*net.IPNet)
+
+		if ok && !networkIP.IP.IsLoopback() && networkIP.IP.To4() != nil {
+			return networkIP.IP
+		}
+	}
+	return nil
+}
+
+func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan struct{}) {
 	conn1, err := connect(ip, port)
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
+		connArray.Append(conn1)
+		go handleConn(conn1, listenCh)
 	} else {
 		fmt.Println(err.Error())
-		fmt.Printf("Initializing your own network on port %d\n", port)
+		fmt.Printf("Initializing your own network on port %s\n", port)
 	}
+	fmt.Println("Your IP is: ", getLocalIP())
 
-	go handleConn(conn1, listenCh)
-
-	ln, _ := net.Listen("tcp", ":"+string(port))
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		fmt.Println("Fatal server error")
+		return
+	}
 	defer ln.Close()
 
 	for {
@@ -62,6 +94,7 @@ func connectToNetwork(ip net.IP, port int, listenCh chan string, quitCh chan str
 		if _, done := <-quitCh; !done {
 			break //Done
 		}
+		connArray.Append(conn)
 		go handleConn(conn, listenCh)
 	}
 
@@ -69,7 +102,7 @@ func connectToNetwork(ip net.IP, port int, listenCh chan string, quitCh chan str
 
 func broadcast(msg string) {
 	messages.Set(msg, true)
-	for conn := range connArray {
+	for conn := range connArray.Iter() {
 		fmt.Fprintf(conn, msg)
 	}
 }
