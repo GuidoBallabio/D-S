@@ -10,7 +10,9 @@ import (
 	"./lib"
 )
 
-const DEFAULT_PORT int = 4444
+const defaultPort string = "4444"
+
+var listeningPort string
 
 var connArray = lib.NewAtomicSlice()
 var messages = lib.NewAtomicMap()
@@ -22,7 +24,7 @@ func main() {
 	var quitCh = make(chan struct{})
 
 	go connectToNetwork(ip, port, listenCh, quitCh)
-	go print(writeCh, listenCh, quitCh)
+	go printBroadcast(writeCh, listenCh, quitCh)
 	go write(writeCh, quitCh)
 	<-quitCh
 }
@@ -37,11 +39,6 @@ func askPeer() (ip net.IP, port string) {
 
 	fmt.Println("Enter port:")
 	fmt.Scanln(&port)
-
-	if false { //remove
-		fmt.Printf("Not valid port, using default port %d\n", DEFAULT_PORT)
-		//port = DEFAULT_PORT
-	}
 
 	return ip, port
 }
@@ -81,54 +78,64 @@ func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan 
 		port = strconv.Itoa(portInt + 1)
 	} else {
 		fmt.Println(err.Error())
+		port = defaultPort
 		fmt.Printf("Initializing your own network on port %s\n", port)
 	}
+	listeningPort = port
 	fmt.Println("Your IP is:", getLocalIP(), "with open port:", port)
+	fmt.Println("You can start chatting")
 
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Println("Fatal server error")
-		return
+		panic(-1)
 	}
 	defer ln.Close()
 
 	for {
 		conn, _ := ln.Accept()
-		connArray.Append(conn)
-		if _, done := <-quitCh; !done {
-			break //Done
+		select {
+		case _, done := <-quitCh:
+			if !done {
+				break //Done
+			}
+		default:
+			connArray.Append(conn)
+			go handleConn(conn, listenCh)
 		}
-		connArray.Append(conn)
-		go handleConn(conn, listenCh)
 	}
 
 }
 
 func broadcast(msg string) {
 	messages.Set(msg, true)
-	fmt.Println(messages)
+
 	for conn := range connArray.Iter() {
-		fmt.Println("Sending to", conn.RemoteAddr())
-		fmt.Println(fmt.Fprintf(conn, msg))
-		conn.Flush()
+		fmt.Fprintf(conn, msg)
 	}
 }
 
-func print(writeCh chan string, listenCh chan string, quitCh chan struct{}) {
+func printBroadcast(writeCh chan string, listenCh chan string, quitCh chan struct{}) {
 	for {
 		select {
 		case msg := <-writeCh:
-			fmt.Println("read from writeCh")
 			broadcast(msg)
 		case msg := <-listenCh:
-			fmt.Println("read from listench")
-			if val, found := messages.Get(msg); true || !found || !val {
-				fmt.Println(msg)
+			if val, found := messages.Get(msg); !found || !val {
+				fmt.Printf(msg)
 				broadcast(msg)
 			}
 		case <-quitCh:
+			connect(getLocalIP(), listeningPort)
+			closeAllConn()
 			break //Done
 		}
+	}
+}
+
+func closeAllConn() {
+	for conn := range connArray.Iter() {
+		conn.Close()
 	}
 }
 
@@ -136,12 +143,11 @@ func write(writeCh chan string, quitCh chan struct{}) {
 	var msg string
 	for {
 		fmt.Scanln(&msg)
-		fmt.Println("read from kb")
 		if msg == "quit" {
 			close(quitCh)
 			break //Done
 		}
-		writeCh <- msg
+		writeCh <- (msg + "\n")
 	}
 }
 
@@ -149,12 +155,10 @@ func handleConn(conn net.Conn, listenCh chan string) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
-	fmt.Println(conn.LocalAddr())
 	for {
 		msg, err := reader.ReadString('\n')
-		fmt.Println(msg, err)
 		if err != nil {
-			fmt.Println("Error: " + err.Error())
+			fmt.Println("Closed connection to", conn.RemoteAddr())
 			break //Done
 		} else {
 			listenCh <- msg
