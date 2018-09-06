@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 
 	"./lib"
 )
@@ -76,11 +77,13 @@ func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan 
 		fmt.Println("Connection to the network Succesfull")
 		connArray.Append(conn1)
 		go handleConn(conn1, listenCh)
+		portInt, _ := strconv.Atoi(port)
+		port = strconv.Itoa(portInt + 1)
 	} else {
 		fmt.Println(err.Error())
 		fmt.Printf("Initializing your own network on port %s\n", port)
 	}
-	fmt.Println("Your IP is: ", getLocalIP())
+	fmt.Println("Your IP is:", getLocalIP(), "with open port:", port)
 
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -91,6 +94,7 @@ func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan 
 
 	for {
 		conn, _ := ln.Accept()
+		connArray.Append(conn)
 		if _, done := <-quitCh; !done {
 			break //Done
 		}
@@ -102,7 +106,9 @@ func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan 
 
 func broadcast(msg string) {
 	messages.Set(msg, true)
+	fmt.Println(messages)
 	for conn := range connArray.Iter() {
+		fmt.Println("Sending to", conn)
 		fmt.Fprintf(conn, msg)
 	}
 }
@@ -111,8 +117,10 @@ func print(writeCh chan string, listenCh chan string, quitCh chan struct{}) {
 	for {
 		select {
 		case msg := <-writeCh:
+			fmt.Println("read from writeCh")
 			broadcast(msg)
 		case msg := <-listenCh:
+			fmt.Println("read from listench")
 			if val, found := messages.Get(msg); !found || !val {
 				fmt.Println(msg)
 				broadcast(msg)
@@ -127,6 +135,7 @@ func write(writeCh chan string, quitCh chan struct{}) {
 	var msg string
 	for {
 		fmt.Scanln(&msg)
+		fmt.Println("read from kb")
 		if msg == "quit" {
 			close(quitCh)
 			break //Done
