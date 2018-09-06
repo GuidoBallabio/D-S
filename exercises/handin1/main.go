@@ -108,8 +108,9 @@ func broadcast(msg string) {
 	messages.Set(msg, true)
 	fmt.Println(messages)
 	for conn := range connArray.Iter() {
-		fmt.Println("Sending to", conn)
-		fmt.Fprintf(conn, msg)
+		fmt.Println("Sending to", conn.RemoteAddr())
+		fmt.Println(fmt.Fprintf(conn, msg))
+		conn.Flush()
 	}
 }
 
@@ -121,7 +122,7 @@ func print(writeCh chan string, listenCh chan string, quitCh chan struct{}) {
 			broadcast(msg)
 		case msg := <-listenCh:
 			fmt.Println("read from listench")
-			if val, found := messages.Get(msg); !found || !val {
+			if val, found := messages.Get(msg); true || !found || !val {
 				fmt.Println(msg)
 				broadcast(msg)
 			}
@@ -148,8 +149,10 @@ func handleConn(conn net.Conn, listenCh chan string) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
+	fmt.Println(conn.LocalAddr())
 	for {
 		msg, err := reader.ReadString('\n')
+		fmt.Println(msg, err)
 		if err != nil {
 			fmt.Println("Error: " + err.Error())
 			break //Done
