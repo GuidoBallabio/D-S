@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 
 	"./lib"
@@ -140,14 +141,15 @@ func closeAllConn() {
 }
 
 func write(writeCh chan string, quitCh chan struct{}) {
-	var msg string
+	reader := bufio.NewReader(os.Stdin)
+
 	for {
-		fmt.Scanln(&msg)
-		if msg == "quit" {
+		msg, _ := reader.ReadString('\n')
+		if msg == "quit\n" {
 			close(quitCh)
 			break //Done
 		}
-		writeCh <- (msg + "\n")
+		writeCh <- msg
 	}
 }
 
