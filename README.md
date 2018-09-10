@@ -27,3 +27,49 @@ Add this to your report:
 
 1. Test you system and describe how you tested it.
 2. Argue that you system has eventual consistency in the sense that if all clients stop typing, then eventually all clients will print the same set of strings.
+
+## Exercise 4.5
+Implement a simple peer-to-peer ledger
+
+Modify your code from Exercise 2.3 to add the following features:
+1. The system now no longer broadcasts strings and prints them. Instead it implements a distributed ledger. Each client keeps a Ledger.
+2. Each client can make Transactions. When they do all other peers eventually update their ledger with the transaction.
+3. The system should ensure eventual consistency, i.e., if all clients stop sending transactions, then all ledgers will eventually be in the same correct state.
+
+```go
+package account
+type Transaction struct {
+    ID string
+    From string
+    To string
+    Amount int
+}
+
+func (l *Ledger) Transaction(t *Transaction) {
+    l.lock.Lock() ; defer l.lock.Unlock()
+    l.Accounts[t.From] -= t.Amount
+    l.Accounts[t.To] += t.Amount
+}
+```
+
+4. Your system only has to work if there are two phases: first all the peers connect,
+then they make transactions. But if you want to accommodate for later comers
+a way to do it is to let each client keep a list of all the transactions it saw and
+then forward them to clients that log in late.
+
+Implement as follows:
+1. Keep a sorted list of peers.
+2. When connecting to a peer, ask for its list of peers.
+3. Then add yourself to your own list.
+4. Then connect to the ten peers after you on the list (with wrap around).
+5. Then broadcast your own presence.
+6. When a new presence is broadcast, add it to your list of peers.
+7. When a transaction is made, broadcast the Transaction object.
+8. When a transaction is received, update the local Ledger object.
+
+Add this to your report:
+1. Test you system and describe how you tested it.
+2. Discuss whether connection to the next ten peers is a good strategy with respect to connectivity. In particular, if the network has 1000 peers, how many connections need to break to partition the network?
+3. Argue that your system has eventual consistency if all processes are correct and the system is run in two-phase mode.
+4. Assume we made the following change to the system: When a transaction arrives, it is rejected if the receiving account goes below 0. Does your system
+still have eventual consistency? Why or why not?
