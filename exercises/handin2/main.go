@@ -2,91 +2,90 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
+	"sync"
 
-	"./lib"
+	. "./account"
+	. "./peers"
 )
 
-const defaultPort string = "4444"
+const defaultPort int = 4444
 
-var listeningPort string
+var localPeer Peer
 
-var connArray = lib.NewAtomicSlice()
-var messages = lib.NewAtomicMap()
+var peersList = NewList()
+var ledger = NewLedger()
+var wg sync.WaitGroup
 
 func main() {
-	ip, port := askPeer()
-	var writeCh = make(chan string)
-	var listenCh = make(chan string)
+	firstPeer := askPeer()
+	var kbCh = make(chan Transaction)
+	var listenCh = make(chan Transaction)
 	var quitCh = make(chan struct{})
 
-	go connectToNetwork(ip, port, listenCh, quitCh)
-	go printBroadcast(writeCh, listenCh, quitCh)
-	go write(writeCh, quitCh)
+	connectToNetwork(firstPeer, listenCh)
+
+	wg.Add(3)
+
+	go beServer(listenCh, quitCh)
+	go printBroadcast(kbCh, listenCh, quitCh)
+	go write(kbCh, quitCh)
 	<-quitCh
+	wg.Wait()
 }
 
-func askPeer() (ip net.IP, port string) {
+func askPeer() Peer {
 	var temp string
 
 	fmt.Println("Enter IP address:")
 	fmt.Scanln(&temp)
 
-	ip = net.ParseIP(temp)
+	ip := net.ParseIP(temp)
 
 	fmt.Println("Enter port:")
-	fmt.Scanln(&port)
+	fmt.Scanln(&temp)
+	port, _ := strconv.Atoi(temp)
 
-	return ip, port
+	return Peer{
+		IP:   ip.String(),
+		Port: port}
 }
 
-func connect(ip net.IP, port string) (net.Conn, error) {
-	if ip == nil {
+func connect(peer Peer) (net.Conn, error) {
+	if peer.IP == "<nil>" {
 		return nil, errors.New("IP is not valid")
 	}
-	return net.Dial("tcp", ip.String()+":"+port)
+	return net.Dial("tcp", peer.GetAddress())
 }
 
-func getLocalIP() net.IP {
-	netInterfaceAddresses, err := net.InterfaceAddrs()
-
-	if err != nil {
-		return nil
-	}
-
-	for _, netInterfaceAddress := range netInterfaceAddresses {
-
-		networkIP, ok := netInterfaceAddress.(*net.IPNet)
-
-		if ok && !networkIP.IP.IsLoopback() && networkIP.IP.To4() != nil {
-			return networkIP.IP
-		}
-	}
-	return nil
-}
-
-func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan struct{}) {
-	conn1, err := connect(ip, port)
+func connectToNetwork(peer Peer, listenCh chan<- Transaction) {
+	conn1, err := connect(peer)
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
-		connArray.Append(conn1)
-		go handleConn(conn1, listenCh)
-		portInt, _ := strconv.Atoi(port)
-		port = strconv.Itoa(portInt + 1)
+		localPeer = GetLocalPeer(peer.Port + 1)
+		peersList.SortedInsert(localPeer)
+		handleFirstConn(conn1, listenCh) //remember to add to the list of peers
 	} else {
 		fmt.Println(err.Error())
-		port = defaultPort
-		fmt.Printf("Initializing your own network on port %s\n", port)
+		localPeer = GetLocalPeer(defaultPort)
+		peersList.SortedInsert(localPeer)
+		fmt.Println("Initializing your own network")
 	}
-	listeningPort = port
-	fmt.Println("Your IP is:", getLocalIP(), "with open port:", port)
+
+	fmt.Println("Your IP is:", peer.IP, "with open port:", peer.GetPort())
 	fmt.Println("You can start chatting")
 
-	ln, err := net.Listen("tcp", ":"+port)
+}
+
+func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
+	defer wg.Done()
+
+	ln, err := net.Listen("tcp", ":"+localPeer.GetPort())
 	if err != nil {
 		fmt.Println("Fatal server error")
 		panic(-1)
@@ -98,72 +97,150 @@ func connectToNetwork(ip net.IP, port string, listenCh chan string, quitCh chan 
 		select {
 		case _, done := <-quitCh:
 			if !done {
+				closeAllConn()
 				break //Done
 			}
 		default:
-			connArray.Append(conn)
-			go handleConn(conn, listenCh)
+			checkAsk(conn)
+			p := peersList.AddPeerFromConn(conn)
+			wg.Add(1)
+			go handleConn(p, listenCh)
 		}
 	}
 
-}
-
-func broadcast(msg string) {
-	messages.Set(msg, true)
-
-	for conn := range connArray.Iter() {
-		fmt.Fprintf(conn, msg)
-	}
-}
-
-func printBroadcast(writeCh chan string, listenCh chan string, quitCh chan struct{}) {
-	for {
-		select {
-		case msg := <-writeCh:
-			broadcast(msg)
-		case msg := <-listenCh:
-			if val, found := messages.Get(msg); !found || !val {
-				fmt.Printf(msg)
-				broadcast(msg)
-			}
-		case <-quitCh:
-			connect(getLocalIP(), listeningPort)
-			closeAllConn()
-			break //Done
-		}
-	}
 }
 
 func closeAllConn() {
-	for conn := range connArray.Iter() {
+	for conn := range peersList.IterConn() {
 		conn.Close()
 	}
 }
 
-func write(writeCh chan string, quitCh chan struct{}) {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		msg, _ := reader.ReadString('\n')
-		if msg == "quit\n" {
-			close(quitCh)
-			break //Done
-		}
-		writeCh <- msg
+func broadcast(t Transaction) {
+	for conn := range peersList.IterConn() {
+		enc := gob.NewEncoder(conn)
+		enc.Encode(t)
 	}
 }
 
-func handleConn(conn net.Conn, listenCh chan string) {
-	defer conn.Close()
-	reader := bufio.NewReader(conn)
+func printBroadcast(kbCh <-chan Transaction, listenCh <-chan Transaction, quitCh <-chan struct{}) {
+	defer wg.Done()
 
 	for {
-		msg, err := reader.ReadString('\n')
+		select {
+		case t := <-kbCh:
+			t = attachNextID(t)
+			applyTransaction(t)
+			broadcast(t)
+		case t := <-listenCh:
+			if checkIfAcceptable(t) {
+				applyTransaction(t)
+				fmt.Println("Received ", t)
+				broadcast(t)
+			}
+		case <-quitCh:
+			connect(localPeer)
+			break //Done
+		}
+	}
+}
+
+func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
+	defer wg.Done()
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		t, quit := askTransaction()
+		if quit {
+			close(quitCh)
+			break //Done
+		}
+		kbCh <- t
+	}
+}
+
+func handleConn(peer Peer, listenCh chan<- Transaction) {
+	defer wg.Done()
+	defer peer.GetConn().Close()
+
+	dec := gob.NewDecoder(peer.GetConn())
+
+	for {
+		t := Transaction{}
+		err := dec.Decode(&t)
+
 		if err != nil {
-			fmt.Println("Closed connection to", conn.RemoteAddr())
+			fmt.Println("Closed connection to ", peer)
 			break //Done
 		} else {
-			listenCh <- msg
+			listenCh <- t
+		}
+	}
+}
+
+func handleFirstConn(conn net.Conn, listenCh chan<- Transaction) {
+	defer conn.Close()
+
+	signalAsk(conn)
+
+	dec := gob.NewDecoder(conn)
+	p := &Peer{}
+	for p.Port == -1 {
+		p := &Peer{}
+		err := dec.Decode(p)
+		if err != nil {
+			peersList.SortedInsert(*p)
+		}
+	}
+
+	i := 0
+	for p := range peersList.IterWrap(localPeer) {
+		if i >= 10 {
+			break
+		}
+		conn1, err := connect(*p)
+		if err != nil {
+			p.AddConn(conn1)
+		}
+		signalNoAsk(conn1)
+		i++
+	}
+
+	// useless broadcast of presence
+	// for conn2 := range peersList.IterConn() {
+	// 	enc := gob.NewEncoder(conn2)
+	// 	enc.Encode(localPeer)
+	// }
+
+	wg.Add(1)
+	peer := peersList.AddPeerFromConn(conn)
+	go handleConn(peer, listenCh)
+}
+
+// ask for list of peers
+func signalAsk(conn net.Conn) {
+	enc := gob.NewEncoder(conn)
+	enc.Encode(Peer{IP: "", Port: -2})
+}
+
+// signal not asking for list of peers
+func signalNoAsk(conn net.Conn) {
+	enc := gob.NewEncoder(conn)
+	enc.Encode(Peer{IP: "", Port: -1})
+}
+
+// check if the peer asks for list of peers
+func checkAsk(conn net.Conn) {
+	dec := gob.NewDecoder(conn)
+	p := &Peer{}
+	err := dec.Decode(p)
+	if err != nil {
+		if p.Port == -2 {
+			enc := gob.NewEncoder(conn)
+			for p := range peersList.Iter() {
+				enc.Encode(p)
+			}
 		}
 	}
 }
