@@ -22,5 +22,5 @@ func NewTransaction(ID, From, To string, Amount int) *Transaction {
 }
 
 func (t Transaction) String() string {
-	return fmt.Sprintf("Transaction: ID\t%s, From\t%s To\t%s, Amount\t%d", t.ID, t.From, t.To, t.Amount)
+	return fmt.Sprintf("Transaction: ID %s, From %s To %s, Amount %d", t.ID, t.From, t.To, t.Amount)
 }

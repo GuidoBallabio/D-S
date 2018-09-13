@@ -6,10 +6,10 @@ import (
 
 // GetLocalPeer returns the peer of the local machine
 func GetLocalPeer(listeningPort int) Peer {
-	return newPeer(GetLocalIP().String(), listeningPort, nil)
+	return newPeer(getLocalIP().String(), listeningPort, nil)
 }
 
-func GetLocalIP() net.IP {
+func getLocalIP() net.IP {
 	netInterfaceAddresses, err := net.InterfaceAddrs()
 
 	if err != nil {

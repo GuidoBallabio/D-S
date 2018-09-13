@@ -20,6 +20,7 @@ var localPeer Peer
 
 var peersList = NewList()
 var ledger = NewLedger()
+var past = make(map[string]bool, 1)
 var wg sync.WaitGroup
 
 func main() {
@@ -190,9 +191,8 @@ func handleConn(peer Peer, listenCh chan<- Transaction) {
 	defer wg.Done()
 	defer peer.GetConn().Close()
 
-	dec := gob.NewDecoder(peer.GetConn())
-
 	for {
+		dec := gob.NewDecoder(peer.GetConn())
 		t := Transaction{}
 		err := dec.Decode(&t)
 
@@ -212,14 +212,16 @@ func processTransaction(kbCh <-chan Transaction, listenCh <-chan Transaction, qu
 	for {
 		select {
 		case t := <-kbCh:
-			fmt.Println("processing") //remove
+			fmt.Println("Processing transaction") //remove
 			t = attachNextID(t)
-			applyTransaction(t)
+			updateLedger(t)
+			fmt.Print(ledger)
 			broadcast(t)
 		case t := <-listenCh:
 			if checkIfAcceptable(t) {
-				applyTransaction(t)
+				updateLedger(t)
 				fmt.Println("Received", t)
+				fmt.Print(ledger)
 				broadcast(t)
 			}
 		case <-quitCh:
@@ -230,21 +232,25 @@ func processTransaction(kbCh <-chan Transaction, listenCh <-chan Transaction, qu
 }
 
 func checkIfAcceptable(t Transaction) bool {
-	return true
+	if val, found := past[t.ID]; !found || !val {
+		return true
+	}
+	return false
 }
 
 func attachNextID(t Transaction) Transaction {
+	t.ID = fmt.Sprintf("%s-%d", localPeer.GetAddress(), ledger.GetClock())
 	return t
 }
 
-func applyTransaction(t Transaction) {
+func updateLedger(t Transaction) {
 	ledger.Transaction(t)
 }
 
 func broadcast(t Transaction) {
-	fmt.Println(peersList)
+	past[t.ID] = true
+
 	for conn := range peersList.IterConn() {
-		fmt.Println(conn) //remove
 		enc := gob.NewEncoder(conn)
 		enc.Encode(t)
 	}
