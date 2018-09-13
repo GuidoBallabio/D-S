@@ -31,10 +31,10 @@ func main() {
 	connectToNetwork(firstPeer, listenCh)
 
 	wg.Add(3)
-
 	go beServer(listenCh, quitCh)
-	go printBroadcast(kbCh, listenCh, quitCh)
+	go processTransaction(kbCh, listenCh, quitCh)
 	go write(kbCh, quitCh)
+
 	<-quitCh
 	wg.Wait()
 }
@@ -56,13 +56,6 @@ func askPeer() Peer {
 		Port: port}
 }
 
-func connect(peer Peer) (net.Conn, error) {
-	if peer.IP == "<nil>" {
-		return nil, errors.New("IP is not valid")
-	}
-	return net.Dial("tcp", peer.GetAddress())
-}
-
 func connectToNetwork(peer Peer, listenCh chan<- Transaction) {
 	conn1, err := connect(peer)
 	if err == nil {
@@ -77,9 +70,63 @@ func connectToNetwork(peer Peer, listenCh chan<- Transaction) {
 		fmt.Println("Initializing your own network")
 	}
 
-	fmt.Println("Your IP is:", peer.IP, "with open port:", peer.GetPort())
-	fmt.Println("You can start chatting")
+	fmt.Println("Your IP is:", localPeer.IP, "with open port:", localPeer.GetPort())
+}
 
+func connect(peer Peer) (net.Conn, error) {
+	if peer.IP == "<nil>" {
+		return nil, errors.New("IP is not valid")
+	}
+	return net.Dial("tcp", peer.GetAddress())
+}
+
+func handleFirstConn(conn net.Conn, listenCh chan<- Transaction) {
+	defer conn.Close()
+
+	// asking for list of peers
+	signalAsk(conn)
+	dec := gob.NewDecoder(conn)
+	p := Peer{}
+	err := dec.Decode(p)
+	for p.Port != -1 {
+		if err == nil {
+			peersList.SortedInsert(p)
+		}
+		err = dec.Decode(&p)
+	}
+	conn.Close()
+
+	// broadcasting ourselves
+	i := 0
+	for p := range peersList.IterWrap(localPeer) {
+		if p != localPeer {
+			if i >= 10 {
+				break
+			}
+			conn1, err := connect(p)
+			if err == nil {
+				peersList.AddConn(p, conn1)
+				p.AddConn(conn1)
+				signalNoAsk(conn1)
+				wg.Add(1)
+				go handleConn(p, listenCh)
+			}
+			i++
+		}
+	}
+
+}
+
+// ask for list of peers
+func signalAsk(conn net.Conn) {
+	enc := gob.NewEncoder(conn)
+	enc.Encode(Peer{IP: "", Port: -1})
+}
+
+// signal not asking for list of peers
+func signalNoAsk(conn net.Conn) {
+	enc := gob.NewEncoder(conn)
+	enc.Encode(localPeer)
 }
 
 func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
@@ -101,10 +148,10 @@ func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
 				break //Done
 			}
 		default:
-			checkAsk(conn)
-			p := peersList.AddPeerFromConn(conn)
-			wg.Add(1)
-			go handleConn(p, listenCh)
+			if p, firstConn := checkAsk(conn); !firstConn {
+				wg.Add(1)
+				go handleConn(p, listenCh)
+			}
 		}
 	}
 
@@ -116,51 +163,30 @@ func closeAllConn() {
 	}
 }
 
-func broadcast(t Transaction) {
-	for conn := range peersList.IterConn() {
-		enc := gob.NewEncoder(conn)
-		enc.Encode(t)
-	}
-}
-
-func printBroadcast(kbCh <-chan Transaction, listenCh <-chan Transaction, quitCh <-chan struct{}) {
-	defer wg.Done()
-
-	for {
-		select {
-		case t := <-kbCh:
-			t = attachNextID(t)
-			applyTransaction(t)
-			broadcast(t)
-		case t := <-listenCh:
-			if checkIfAcceptable(t) {
-				applyTransaction(t)
-				fmt.Println("Received ", t)
-				broadcast(t)
+// check if the peer asks for list of peers
+func checkAsk(conn net.Conn) (Peer, bool) {
+	dec := gob.NewDecoder(conn)
+	p := &Peer{}
+	err := dec.Decode(p)
+	if err == nil {
+		if p.Port == -1 {
+			enc := gob.NewEncoder(conn)
+			for p := range peersList.Iter() {
+				enc.Encode(p)
 			}
-		case <-quitCh:
-			connect(localPeer)
-			break //Done
+
+			enc.Encode(Peer{Port: -1})
+			return Peer{}, true
 		}
+		p.AddConn(conn)
+		peersList.SortedInsert(*p)
+		return *p, false
 	}
-}
-
-func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
-	defer wg.Done()
-
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		t, quit := askTransaction()
-		if quit {
-			close(quitCh)
-			break //Done
-		}
-		kbCh <- t
-	}
+	return Peer{}, true
 }
 
 func handleConn(peer Peer, listenCh chan<- Transaction) {
+	fmt.Println("Connected to", peer)
 	defer wg.Done()
 	defer peer.GetConn().Close()
 
@@ -171,7 +197,8 @@ func handleConn(peer Peer, listenCh chan<- Transaction) {
 		err := dec.Decode(&t)
 
 		if err != nil {
-			fmt.Println("Closed connection to ", peer)
+			fmt.Println(err)
+			fmt.Println("Closed connection to", peer)
 			break //Done
 		} else {
 			listenCh <- t
@@ -179,68 +206,107 @@ func handleConn(peer Peer, listenCh chan<- Transaction) {
 	}
 }
 
-func handleFirstConn(conn net.Conn, listenCh chan<- Transaction) {
-	defer conn.Close()
+func processTransaction(kbCh <-chan Transaction, listenCh <-chan Transaction, quitCh <-chan struct{}) {
+	defer wg.Done()
 
-	signalAsk(conn)
-
-	dec := gob.NewDecoder(conn)
-	p := &Peer{}
-	for p.Port == -1 {
-		p := &Peer{}
-		err := dec.Decode(p)
-		if err != nil {
-			peersList.SortedInsert(*p)
-		}
-	}
-
-	i := 0
-	for p := range peersList.IterWrap(localPeer) {
-		if i >= 10 {
-			break
-		}
-		conn1, err := connect(*p)
-		if err != nil {
-			p.AddConn(conn1)
-		}
-		signalNoAsk(conn1)
-		i++
-	}
-
-	// useless broadcast of presence
-	// for conn2 := range peersList.IterConn() {
-	// 	enc := gob.NewEncoder(conn2)
-	// 	enc.Encode(localPeer)
-	// }
-
-	wg.Add(1)
-	peer := peersList.AddPeerFromConn(conn)
-	go handleConn(peer, listenCh)
-}
-
-// ask for list of peers
-func signalAsk(conn net.Conn) {
-	enc := gob.NewEncoder(conn)
-	enc.Encode(Peer{IP: "", Port: -2})
-}
-
-// signal not asking for list of peers
-func signalNoAsk(conn net.Conn) {
-	enc := gob.NewEncoder(conn)
-	enc.Encode(Peer{IP: "", Port: -1})
-}
-
-// check if the peer asks for list of peers
-func checkAsk(conn net.Conn) {
-	dec := gob.NewDecoder(conn)
-	p := &Peer{}
-	err := dec.Decode(p)
-	if err != nil {
-		if p.Port == -2 {
-			enc := gob.NewEncoder(conn)
-			for p := range peersList.Iter() {
-				enc.Encode(p)
+	for {
+		select {
+		case t := <-kbCh:
+			fmt.Println("processing") //remove
+			t = attachNextID(t)
+			applyTransaction(t)
+			broadcast(t)
+		case t := <-listenCh:
+			if checkIfAcceptable(t) {
+				applyTransaction(t)
+				fmt.Println("Received", t)
+				broadcast(t)
 			}
+		case <-quitCh:
+			connect(localPeer)
+			break //Done
 		}
 	}
+}
+
+func checkIfAcceptable(t Transaction) bool {
+	return true
+}
+
+func attachNextID(t Transaction) Transaction {
+	return t
+}
+
+func applyTransaction(t Transaction) {
+
+}
+
+func broadcast(t Transaction) {
+	fmt.Println(peersList)
+	for conn := range peersList.IterConn() {
+		fmt.Println(conn) //remove
+		enc := gob.NewEncoder(conn)
+		enc.Encode(t)
+	}
+}
+
+func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
+	defer wg.Done()
+
+	fmt.Println("Insert a transaction as FromWho ToWhom HowMuch")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Split(bufio.ScanWords)
+
+	for {
+		t, quit := askTransaction(scanner)
+		if quit {
+			fmt.Println("quitting")
+			close(quitCh)
+			break //Done
+		}
+		kbCh <- t
+		fmt.Println("Sent ", t)
+	}
+}
+
+func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
+
+	scanner.Scan()
+	from := scanner.Text()
+
+	if from == "quit" {
+		return Transaction{}, true
+	}
+
+	scanner.Scan()
+	to := scanner.Text()
+
+	if from == "quit" {
+		return Transaction{}, true
+	}
+
+	scanner.Scan()
+	amount := scanner.Text()
+
+	if from == "quit" {
+		return Transaction{}, true
+	}
+
+	intAmount, err := strconv.Atoi(amount)
+	for err != nil {
+		fmt.Println("not valid integer amount")
+		scanner.Scan()
+		amount := scanner.Text()
+
+		if from == "quit" {
+			return Transaction{}, true
+		}
+
+		intAmount, err = strconv.Atoi(amount)
+	}
+
+	return Transaction{
+		From:   from,
+		To:     to,
+		Amount: intAmount}, false
 }

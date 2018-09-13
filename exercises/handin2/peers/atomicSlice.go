@@ -16,7 +16,7 @@ type AtomicSortedSlice struct {
 // NewList is the constructor of the AtomicSortedSlice type, it just creates an empty synchronized slice
 func NewList() *AtomicSortedSlice {
 	var aslice AtomicSortedSlice
-	aslice.data = make([]Peer, 10)
+	aslice.data = make([]Peer, 0)
 	return &aslice
 }
 
@@ -30,12 +30,11 @@ func (aslice *AtomicSortedSlice) AddPeerFromConn(conn net.Conn) Peer {
 
 // find search the slice for an element and return its index
 func (aslice *AtomicSortedSlice) find(peer Peer) (int, error) {
-	i := sort.Search(len(aslice.data), func(i int) bool { return aslice.data[i].less(peer) })
-	if i < len(aslice.data) && aslice.data[i] == peer {
+	i := sort.Search(len(aslice.data), func(i int) bool { return peer.less(aslice.data[i]) }) - 1
+	if i >= 0 && i < len(aslice.data) && aslice.data[i] == peer {
 		return i, nil
 	}
-
-	return i, errors.New("Not found, but i is the index where it would be inserted")
+	return i + 1, errors.New("Not found, but i is the index where it would be inserted")
 }
 
 // SortedInsert is the synchronized sorted append that returns the index where it was added
@@ -45,24 +44,29 @@ func (aslice *AtomicSortedSlice) SortedInsert(peer Peer) int {
 
 	l := len(aslice.data)
 	if l == 0 {
-		aslice.data[0] = peer
+		aslice.data = []Peer{peer}
 		return 0
 	}
 
 	i, err := aslice.find(peer)
 
-	if err != nil { //	i==l not found = new value is the smallest
+	if err == nil { //already present
+		return i
+	}
+
+	if i == 0 { // not found = new value is the smallest
 		aslice.data = append([]Peer{peer}, aslice.data...)
 		return 0
 	}
 
-	if i == l-1 { // new value is the biggest
-		aslice.data = append(aslice.data[0:i], peer)
+	if i == l { // new value is the biggest
+		aslice.data = append(aslice.data, peer)
 		return i
 	}
 
-	aslice.data = append(aslice.data[0:i], peer)
-	aslice.data = append(aslice.data, aslice.data[i+1:]...)
+	aslice.data = append(aslice.data, Peer{})
+	copy(aslice.data[i+1:], aslice.data[i:])
+	aslice.data[i] = peer
 	return i
 }
 
@@ -86,25 +90,25 @@ func (aslice *AtomicSortedSlice) Iter() <-chan Peer {
 }
 
 // IterWrap accept a peer or an index and iterates from that item to itself wrapping around
-func (aslice *AtomicSortedSlice) IterWrap(peer Peer) <-chan *Peer {
+func (aslice *AtomicSortedSlice) IterWrap(peer Peer) <-chan Peer {
 
-	c := make(chan *Peer)
+	c := make(chan Peer)
 
 	f := func() {
 		aslice.rwLock.RLock()
 		defer aslice.rwLock.RUnlock()
 
 		i, err := aslice.find(peer)
+
 		if err != nil {
 			close(c)
 			return
 		}
-
 		for _, value := range aslice.data[i+1:] {
-			c <- &value
+			c <- value
 		}
 		for _, value := range aslice.data[:i] {
-			c <- &value
+			c <- value
 		}
 		close(c)
 	}
@@ -143,4 +147,17 @@ func (aslice *AtomicSortedSlice) GetPeerByConn(conn net.Conn) Peer {
 		}
 	}
 	return Peer{}
+}
+
+// AddConn finds peer in slice and adds net.Conn to it
+func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) {
+	aslice.rwLock.RLock()
+	defer aslice.rwLock.RUnlock()
+
+	i, err := aslice.find(peer)
+	if err != nil {
+		return
+	}
+
+	aslice.data[i].AddConn(conn)
 }

@@ -54,6 +54,6 @@ func (peer *Peer) less(peer2 Peer) bool {
 	return false
 }
 
-func (peer *Peer) String() string {
+func (peer Peer) String() string {
 	return fmt.Sprintf("Peer: %s", peer.GetAddress())
 }
