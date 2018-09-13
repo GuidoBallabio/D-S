@@ -238,7 +238,7 @@ func attachNextID(t Transaction) Transaction {
 }
 
 func applyTransaction(t Transaction) {
-
+	ledger.Transaction(t)
 }
 
 func broadcast(t Transaction) {

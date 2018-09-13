@@ -18,7 +18,7 @@ func NewLedger() *Ledger {
 }
 
 // Transaction is method of ledger that applias a transaction to itself
-func (l *Ledger) Transaction(t *Transaction) {
+func (l *Ledger) Transaction(t Transaction) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	l.Accounts[t.From] -= t.Amount
