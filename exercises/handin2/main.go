@@ -33,7 +33,7 @@ func main() {
 
 	wg.Add(3)
 	go beServer(listenCh, quitCh)
-	go processTransaction(kbCh, listenCh, quitCh)
+	go processTransactions(kbCh, listenCh, quitCh)
 	go write(kbCh, quitCh)
 
 	<-quitCh
@@ -132,6 +132,7 @@ func signalNoAsk(conn net.Conn) {
 
 func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
 	defer wg.Done()
+	defer fmt.Println("server closed")
 
 	ln, err := net.Listen("tcp", ":"+localPeer.GetPort())
 	if err != nil {
@@ -143,10 +144,10 @@ func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
 	for {
 		conn, _ := ln.Accept()
 		select {
-		case _, done := <-quitCh:
-			if !done {
+		case _, open := <-quitCh:
+			if !open {
 				closeAllConn()
-				break //Done
+				return //Done
 			}
 		default:
 			if p, firstConn := checkAsk(conn); !firstConn {
@@ -199,6 +200,7 @@ func handleConn(peer Peer, listenCh chan<- Transaction) {
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Closed connection to", peer)
+			peersList.Remove(peer)
 			break //Done
 		} else {
 			listenCh <- t
@@ -206,8 +208,9 @@ func handleConn(peer Peer, listenCh chan<- Transaction) {
 	}
 }
 
-func processTransaction(kbCh <-chan Transaction, listenCh <-chan Transaction, quitCh <-chan struct{}) {
+func processTransactions(kbCh <-chan Transaction, listenCh <-chan Transaction, quitCh <-chan struct{}) {
 	defer wg.Done()
+	defer fmt.Println("broadcast closed")
 
 	for {
 		select {
@@ -225,8 +228,9 @@ func processTransaction(kbCh <-chan Transaction, listenCh <-chan Transaction, qu
 				broadcast(t)
 			}
 		case <-quitCh:
+			fmt.Println("broadcast going to connect to", localPeer)
 			connect(localPeer)
-			break //Done
+			return //Done
 		}
 	}
 }
@@ -258,6 +262,7 @@ func broadcast(t Transaction) {
 
 func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
 	defer wg.Done()
+	defer fmt.Println("kb closed")
 
 	fmt.Println("Insert a transaction as FromWho ToWhom HowMuch")
 	scanner := bufio.NewScanner(os.Stdin)
@@ -287,14 +292,14 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 	scanner.Scan()
 	to := scanner.Text()
 
-	if from == "quit" {
+	if to == "quit" {
 		return Transaction{}, true
 	}
 
 	scanner.Scan()
 	amount := scanner.Text()
 
-	if from == "quit" {
+	if amount == "quit" {
 		return Transaction{}, true
 	}
 

@@ -161,3 +161,14 @@ func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) {
 
 	aslice.data[i].AddConn(conn)
 }
+
+// Remove a peer from the slice
+func (aslice *AtomicSortedSlice) Remove(peer Peer) {
+	aslice.rwLock.Lock()
+	defer aslice.rwLock.Unlock()
+
+	i, err := aslice.find(peer)
+	if err == nil {
+		aslice.data = append(aslice.data[:i], aslice.data[i+1:]...)
+	}
+}
