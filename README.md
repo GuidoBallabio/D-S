@@ -73,3 +73,45 @@ Add this to your report:
 3. Argue that your system has eventual consistency if all processes are correct and the system is run in two-phase mode.
 4. Assume we made the following change to the system: When a transaction arrives, it is rejected if the receiving account goes below 0. Does your system
 still have eventual consistency? Why or why not?
+
+## Exercise 5.11 
+RSA encryption 
+
+Create a Go package with methods KeyGen, Encrypt and Decrypt, that implement RSA key generation, encryption and de-
+cryption. Your solution should use integers from the math/big package.
+
+The KeyGen method should take as input an integer k, such that the bit length
+of the generated modulus n = pq is k. The primes p, q do not need to be primes
+with certainty, they only need to be “probable primes”.
+
+The public exponent e should be 3 (the smallest possible value, which gives
+the fastest possible encryption). This means that the primes p, q that you output
+must be such that
+$$gcd(3, p − 1) = gcd(3, q − 1) = 1$$
+
+Recall that e = 3 and d must satisfy that 3d mod (p − 1)(q − 1) = 1. Another
+way to express this is to say that d must be the inverse of 3 modulo (p − 1)(q − 1),
+this is written
+d = 3 −1 mod (p − 1)(q − 1).
+
+This way to express the condition will be useful when computing d.
+Facts you may find useful:
+* Other than standard methods for addition and multiplication, Mod and ModInverse will be useful.
+* To generate cryptographically secure randomness, use crypto/rand. In particular, the function Prime 
+from the crypto/rand package may be helpful to you here.
+
+Test your solution by verifying (at least) that your modulus has the required
+length and that encryption followed by decryption of a few random plaintexts
+outputs the original plaintexts. Note that plaintexts and ciphtertexts in RSA are
+basically numbers in a certain interval. So it is sufficient to test if encryption of
+a number followed by decryption returns the original number. You do not need
+to, for instance, convert character strings to numbers.
+
+Implement methods EncryptToFile and DecryptFromFile that encrypt and
+decrypt using AES in counter mode, using a key that is supplied as input. The
+EncryptToFile method should take as input a file name and should write the
+ciphertext to the file. Conversely the DecryptFromFile method should read the
+ciphertext from the file specified, decrypt and output the plaintext.
+
+Test your solution by encrypting a secret RSA key to a file. Then decrypt from
+the file, and check that the result can be used for RSA decryption.
