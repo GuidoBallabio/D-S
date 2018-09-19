@@ -13,14 +13,18 @@ type RSAKeyPair struct {
 
 // RSAKey is a key for RSA encryption
 type RSAKey struct {
-	n, exp *big.Int
+	N, Exp *big.Int
 }
+
+var zero = big.NewInt(0)
+var one = big.NewInt(1)
+var two = big.NewInt(2)
 
 var publicExponent = big.NewInt(3)
 
 // KeyGen generates a key pair for RSA
 func KeyGen(bits int) (*RSAKeyPair, error) {
-	var n, k, e, d, pl, ql *big.Int
+	var n, d, e, pl, ql, phi = big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0)
 
 	e.Set(publicExponent)
 
@@ -34,34 +38,41 @@ func KeyGen(bits int) (*RSAKeyPair, error) {
 		return nil, err
 	}
 
+	for q.Cmp(p) == 0 {
+		q, err = findPrimeNotCoprime(bits/2, e)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	n.Mul(p, q)
 
-	pl.Sub(p, big.NewInt(1))
-	ql.Sub(q, big.NewInt(1))
+	pl.Sub(p, one)
+	ql.Sub(q, one)
 
-	k.Mul(pl, ql)
+	phi.Mul(pl, ql)
 
-	d.ModInverse(e, k)
+	d.ModInverse(e, phi)
 
 	return &RSAKeyPair{
 		Public: RSAKey{
-			n:   n,
-			exp: e},
+			N:   n,
+			Exp: e},
 		Private: RSAKey{
-			n:   n,
-			exp: d}}, nil
+			N:   n,
+			Exp: d}}, nil
 }
 
-func findPrimeNotCoprime(bits int, e *big.Int) (p *big.Int, err error) {
-	var pl, temp *big.Int
-	temp.Set(e)
+func findPrimeNotCoprime(bits int, e *big.Int) (*big.Int, error) {
+	var pl, temp big.Int
+	temp.Set(one)
 
-	p, err = rand.Prime(rand.Reader, bits)
+	p, err := rand.Prime(rand.Reader, bits)
 	if err != nil {
 		return nil, err
 	}
 
-	for temp.GCD(nil, nil, pl.Sub(p, big.NewInt(1)), e).Cmp(big.NewInt(1)) == 0 {
+	for temp.GCD(nil, nil, pl.Sub(p, one), e).Cmp(one) != 0 {
 		p, err = rand.Prime(rand.Reader, bits/2)
 		if err != nil {
 			return nil, err
@@ -73,14 +84,14 @@ func findPrimeNotCoprime(bits int, e *big.Int) (p *big.Int, err error) {
 
 // Encrypt plaintext big.Int using RSAKey
 func Encrypt(pt *big.Int, pubKey RSAKey) *big.Int {
-	var ct *big.Int
+	var ct big.Int
 
-	return ct.Exp(pt, pubKey.exp, pubKey.n)
+	return ct.Exp(pt, pubKey.Exp, pubKey.N)
 }
 
 // Decrypt chipertext big.Int using RSAKey
 func Decrypt(ct *big.Int, privKey RSAKey) *big.Int {
-	var pt *big.Int
+	var pt big.Int
 
-	return pt.Exp(pt, privKey.exp, privKey.n)
+	return pt.Exp(ct, privKey.Exp, privKey.N)
 }
