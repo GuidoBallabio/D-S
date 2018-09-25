@@ -1,7 +1,7 @@
 # Distributed Systems and Security
 
 ## Exercise 2.3 
-Implement a toy peer-to-peer network.
+### Implement a toy peer-to-peer network.
 
 This exercise asks you to program in Go a toy example of a peer-to-peer flooding network for send-
 ing strings around. The peer-to-peer network should then be used to build a
@@ -29,7 +29,7 @@ Add this to your report:
 2. Argue that you system has eventual consistency in the sense that if all clients stop typing, then eventually all clients will print the same set of strings.
 
 ## Exercise 4.5
-Implement a simple peer-to-peer ledger
+### Implement a simple peer-to-peer ledger
 
 Modify your code from Exercise 2.3 to add the following features:
 1. The system now no longer broadcasts strings and prints them. Instead it implements a distributed ledger. Each client keeps a Ledger.
@@ -75,7 +75,7 @@ Add this to your report:
 still have eventual consistency? Why or why not?
 
 ## Exercise 5.11 
-RSA encryption 
+### RSA encryption 
 
 Create a Go package with methods KeyGen, Encrypt and Decrypt, that implement RSA key generation, encryption and de-
 cryption. Your solution should use integers from the math/big package.
@@ -115,3 +115,25 @@ ciphertext from the file specified, decrypt and output the plaintext.
 
 Test your solution by encrypting a secret RSA key to a file. Then decrypt from
 the file, and check that the result can be used for RSA decryption.
+
+## Exercise 6.10 
+### RSA signatures
+
+Extend your Go package from Exercise 5.11 so that it can generate and verify RSA signatures, where the message is first
+hashed with SHA-256 and then the hash value is signed using RSA, as described
+in Sec. 6.4. The hashing can be done with the crypto/sha256 package.
+120Note: international standards for signatures always demand that the hash value
+is padded in some way before being passed to RSA, but you can ignore this here.
+Thus the hash value (which will be returned as a byte array) can be converted to
+an integer directly. Such direct conversion should not be done in a real application.
+In addition to the code, your solution should contain the following:
+
+1. Verify that you can both generate and verify the signature on at least one message. Also modify the message and check that your verification rejects.
+2. Measure the speed at which you can hash, in bits per second. For this you should time the hashing of messages much longer than a hash value, in order
+to get realistic data – say 10KB;
+3. Measure the time you code spends to produce an RSA signature on a hash value when using a 2000 bit RSA key;
+4. Assume you had to process the entire message using RSA. Use the result from question 3 to compute the speed at which you could do this (in bits per second).
+
+Hint: one of the RSA operations you timed in question 3 would allow you to
+process about 2000 bits. Compare your result to the speed you measured in
+question 2. Does it look like hashing makes signing more efficient?
