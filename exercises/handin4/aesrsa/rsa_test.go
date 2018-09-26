@@ -69,6 +69,20 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 }
 
+func TestSignatureVerify(t *testing.T) {
+	keys, err := KeyGen(10)
+	checkTest(err, t)
+
+	pt := big.NewInt(84)
+
+	sig := Signature(pt, keys.Private)
+	result := Verify(sig, keys.Public, pt)
+
+	if !result {
+		t.Errorf("Message has been modified!")
+	}
+}
+
 func checkTest(err error, t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
