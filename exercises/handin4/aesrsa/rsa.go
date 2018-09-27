@@ -3,7 +3,6 @@ package aesrsa
 import (
 	"crypto/rand"
 	"math/big"
-	"crypto/sha256"
 )
 
 // RSAKeyPair is a pair of public/private key pair for RSA encryption
@@ -95,28 +94,4 @@ func Decrypt(ct *big.Int, privKey RSAKey) *big.Int {
 	var pt big.Int
 
 	return pt.Exp(ct, privKey.Exp, privKey.N)
-}
-
-func Signature(pt *big.Int, privKey RSAKey) *big.Int {
-	// Create hash of the message
-	sha_256 := sha256.New()
-	sha_256.Write([]byte(pt))
-	h := sha256.Sum256(nil)
-
-	// Sign hash with private key
-	var sig big.Int
-	return sig.Exp(pt, privKey.Exp, privKey.N)
-}
-
-func Verify(sig *big.Int, pubKey RSAKey, pt *big.Int) bool{
-	// Create hash of the message
-	sha_256 := sha256.New()
-	sha_256.Write([]byte(pt))
-	h := sha256.Sum256(nil)
-
-	// Recover the hash from the signature
-	var h1 big.Int
-	h1.Exp(sig, pubKey.Exp, pubKey.N)
-
-	return h1 == h
 }
