@@ -1,6 +1,7 @@
 package aesrsa
 
 import (
+	"crypto/sha256"
 	"math/big"
 	"testing"
 )
@@ -56,10 +57,13 @@ func TestFindPrimeNotCoprime(t *testing.T) {
 }
 
 func TestEncryptDecrypt(t *testing.T) {
-	keys, err := KeyGen(10)
+	keys, err := KeyGen(1024)
 	checkTest(err, t)
 
-	pt := big.NewInt(84)
+	// Generating big number
+	a := big.NewInt(84).Bytes()
+	b := sha256.Sum256(a)
+	pt := new(big.Int).SetBytes(b[:])
 
 	ct := Encrypt(pt, keys.Public)
 	temp := Decrypt(ct, keys.Private)

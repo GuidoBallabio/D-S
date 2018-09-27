@@ -3,7 +3,6 @@ package aesrsa
 import (
 	"bytes"
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 )
 
@@ -13,7 +12,6 @@ func SignRSA(input []byte, privkey RSAKey) []byte {
 	hash := sha256.Sum256(input)
 
 	ptHash := new(big.Int).SetBytes(hash[:])
-	fmt.Println(input, hash, ptHash)
 	return Encrypt(ptHash, privkey).Bytes()
 }
 
@@ -22,11 +20,9 @@ func VerifyRSA(input []byte, sign []byte, pubkey RSAKey) bool {
 	// Create hash of the message
 	hash := sha256.Sum256(input)
 
+	// Extract signed hash
 	ctHash := new(big.Int).SetBytes(sign)
-	// Recover the hash from the signature
 	hashSigned := Decrypt(ctHash, pubkey).Bytes()
-
-	fmt.Println(input, hash, sign, ctHash, hashSigned)
 
 	return bytes.Equal(hashSigned, hash[:])
 }
