@@ -95,3 +95,17 @@ func Decrypt(ct *big.Int, privKey RSAKey) *big.Int {
 
 	return pt.Exp(ct, privKey.Exp, privKey.N)
 }
+
+// EncryptBytes plaintext big.Int using RSAKey
+func EncryptBytes(pt []byte, key RSAKey) []byte {
+	var ct big.Int
+
+	return ct.Exp(new(big.Int).SetBytes(pt), key.Exp, key.N).Bytes()
+}
+
+// DecryptBytes chipertext big.Int using RSAKey
+func DecryptBytes(ct []byte, key RSAKey) []byte {
+	var pt big.Int
+
+	return pt.Exp(new(big.Int).SetBytes(ct), key.Exp, key.N).Bytes()
+}
