@@ -35,15 +35,23 @@ func (l *Ledger) TransactionWithBalanceCheck(t Transaction) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	if l.Accounts[t.From] > t.Amount {
-		l.clock++
-		l.Accounts[t.From] -= t.Amount
-		l.Accounts[t.To] += t.Amount
+	val, found := l.Accounts[t.From]
 
+	if !found {
+		l.clock++
+		l.Accounts[t.From] = t.Amount
 		return nil
 	}
 
-	return errors.New("Overdrwaing from balance not allowed")
+	if val < t.Amount {
+		return errors.New("Overdrwaing from balance not allowed")
+	}
+
+	l.clock++
+	l.Accounts[t.From] -= t.Amount
+	l.Accounts[t.To] += t.Amount
+
+	return nil
 }
 
 // GetClock return the ledger clock

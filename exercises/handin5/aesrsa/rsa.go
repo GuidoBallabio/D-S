@@ -2,8 +2,8 @@ package aesrsa
 
 import (
 	"crypto/rand"
+	"encoding/asn1"
 	"encoding/base64"
-	"encoding/json"
 	"math/big"
 )
 
@@ -114,19 +114,19 @@ func DecryptBytes(ct []byte, key RSAKey) []byte {
 
 // KeyToString encodes a key to a base64 string
 func KeyToString(key RSAKey) string {
-	jsonKey, err := json.Marshal(key)
+	bits, err := asn1.Marshal(key)
 	check(err)
 
-	return base64.StdEncoding.EncodeToString(jsonKey)
+	return base64.StdEncoding.EncodeToString(bits)
 }
 
 // KeyFromString decodes a key from a base64 string
 func KeyFromString(key64 string) RSAKey {
-	jsonKey, err := base64.StdEncoding.DecodeString(key64)
+	bits, err := base64.StdEncoding.DecodeString(key64)
 	check(err)
 
 	key := RSAKey{}
-	err = json.Unmarshal(jsonKey, &key)
+	_, err = asn1.Unmarshal(bits, &key)
 	check(err)
 
 	return key

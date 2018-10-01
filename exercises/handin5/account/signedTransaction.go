@@ -1,6 +1,7 @@
 package account
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -39,7 +40,7 @@ func SignTransaction(t Transaction, privKey aesrsa.RSAKey) SignedTransaction {
 	jsonT, err := json.Marshal(t)
 	check(err)
 
-	sign := string(aesrsa.SignRSA(jsonT, privKey))
+	sign := base64.StdEncoding.EncodeToString(aesrsa.SignRSA(jsonT, privKey))
 
 	return SignedTransaction{
 		ID:        t.ID,
@@ -55,7 +56,10 @@ func (st SignedTransaction) VerifyTransaction() bool {
 	jsonT, err := json.Marshal(t)
 	check(err)
 
-	return aesrsa.VerifyRSA(jsonT, []byte(st.Signature), aesrsa.KeyFromString(st.From))
+	sign, err := base64.StdEncoding.DecodeString(st.Signature)
+	check(err)
+
+	return aesrsa.VerifyRSA(jsonT, sign, aesrsa.KeyFromString(st.From))
 }
 
 func (st SignedTransaction) String() string {

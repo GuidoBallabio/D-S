@@ -69,9 +69,9 @@ func createKeys() {
 	}
 
 	fmt.Println("Your secret key is:")
-	fmt.Println(localKeys.Private)
+	fmt.Println(aesrsa.KeyToString(localKeys.Private))
 	fmt.Println("Your public key is:")
-	fmt.Println(localKeys.Public)
+	fmt.Println(aesrsa.KeyToString(localKeys.Public))
 }
 
 func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction) {
@@ -233,6 +233,7 @@ func processTransactions(kbCh <-chan Transaction, listenCh <-chan SignedTransact
 			fmt.Println("Processing transaction")
 			t = attachNextID(t)
 			if updateLedger(t) {
+				fmt.Println("Sent ", t)
 				fmt.Println(ledger)
 				st := signTransaction(t)
 				broadcast(st)
@@ -251,7 +252,7 @@ func processTransactions(kbCh <-chan Transaction, listenCh <-chan SignedTransact
 }
 
 func isOld(st SignedTransaction) bool {
-	if val, found := past[st.ID]; !found || !val {
+	if val, found := past[st.ID]; found && val {
 		return true
 	}
 	return false
@@ -274,8 +275,9 @@ func updateLedger(t Transaction) bool {
 	err := ledger.TransactionWithBalanceCheck(t)
 	if err != nil {
 		fmt.Println(err.Error())
+		return false
 	}
-	return err == nil
+	return true
 }
 
 func broadcast(st SignedTransaction) {
@@ -290,7 +292,7 @@ func broadcast(st SignedTransaction) {
 func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
 	defer wg.Done()
 
-	fmt.Println("Insert a transaction as FromWho ToWhom HowMuch")
+	fmt.Println("Insert a transaction as ToWhom HowMuch")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanWords)
 
@@ -302,18 +304,10 @@ func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
 			break //Done
 		}
 		kbCh <- t
-		fmt.Println("Sent ", t)
 	}
 }
 
 func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
-
-	scanner.Scan()
-	from := scanner.Text()
-
-	if from == "quit" {
-		return Transaction{}, true
-	}
 
 	scanner.Scan()
 	to := scanner.Text()
@@ -335,7 +329,7 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 		scanner.Scan()
 		amount := scanner.Text()
 
-		if from == "quit" {
+		if amount == "quit" {
 			return Transaction{}, true
 		}
 
@@ -343,7 +337,7 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 	}
 
 	return Transaction{
-		From:   from,
+		From:   aesrsa.KeyToString(localKeys.Public),
 		To:     to,
 		Amount: intAmount}, false
 }
