@@ -263,7 +263,7 @@ func isVerified(st SignedTransaction) bool {
 }
 
 func attachNextID(t Transaction) Transaction {
-	t.ID = fmt.Sprintf("%s-%d", localPeer.GetAddress(), ledger.GetClock())
+	t.ID = fmt.Sprintf("%d-%s", ledger.GetClock(), localPeer.GetAddress())
 	return t
 }
 

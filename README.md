@@ -122,7 +122,7 @@ the file, and check that the result can be used for RSA decryption.
 Extend your Go package from Exercise 5.11 so that it can generate and verify RSA signatures, where the message is first
 hashed with SHA-256 and then the hash value is signed using RSA, as described
 in Sec. 6.4. The hashing can be done with the crypto/sha256 package.
-120Note: international standards for signatures always demand that the hash value
+Note: international standards for signatures always demand that the hash value
 is padded in some way before being passed to RSA, but you can ignore this here.
 Thus the hash value (which will be returned as a byte array) can be converted to
 an integer directly. Such direct conversion should not be done in a real application.
@@ -137,3 +137,98 @@ to get realistic data – say 10KB;
 Hint: one of the RSA operations you timed in question 3 would allow you to
 process about 2000 bits. Compare your result to the speed you measured in
 question 2. Does it look like hashing makes signing more efficient?
+
+## Exercise 6.13 
+(Implement a Simple Peer-to-Peer Ledger)
+
+Modify your code from Exercise 4.5 to add the following features:
+
+1. The system still keeps a Ledger (see Fig. 4.6).
+2. Each client can make SignedTransactions (see Fig. 6.1), i.e., what is broad-
+cast is now objects of the type SignedTransaction.
+3. The sender and receive of a transaction are now RSA public keys encoded
+as strings. The client can only make a transaction if it knows the secret key
+corresponding to the sending account. This ensure that only the owner of the
+account can take money from the account. In a bit more detail, you have to
+find a way to encode and decode RSA public keys into the string type. If
+we call the encoding of pk by the name enc(pk), then the amount that ”be-
+longs” to pk is Accounts[enc(pk)]. To transfer money from pk one makes a
+SignedTransaction where pk is encoded and put in the From-field. An encod-
+ing of the RSA public key to receive the amount is placed in the To-field. All
+the fields (save Signature) are then signed under pk (using the corresponding
+secret key) and the signature is placed in Signature. A SignedTransaction is
+valid if the signature is valid. Only valid transactions are executed. The invalid
+transactions are simply ignored.
+
+Implement as in Exercise 4.5 with these additions:
+
+```go
+package account
+type SignedTransaction struct {
+	ID
+	string // Any string
+	From
+	string // A verification key coded as a string
+	To
+	string // A verification key coded as a string
+	Amount
+	int
+	// Amount to transfer
+	Signature string // Potential signature coded as string
+}
+
+func (l *Ledger) SignedTransaction(t *SignedTransaction) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	/* We verify that the t.Signature is a valid RSA
+	 * signature on the rest of the fields in t under
+	 * the public key t.From.
+	 */
+	validSignature := true
+	if validSignature {
+		l.Accounts[t.From] -= t.Amount
+		l.Accounts[t.To] += t.Amount
+	}
+}
+```
+
+1. When a transaction is made, broadcast the SignedTransaction object.
+2. When a transaction is received, update the local Ledger object if the SignedTransaction
+is has a valid signature and the amount is non-negative.
+
+Add this to your report:
+
+1. How you TA can easily run your system, how is it started, what kind of com-
+mands does it take and so on.
+2. Test your system and describe how you tested it.
+3. If the test is automated, which is preferable, then describe how the TA can run
+the test.
+
+You do not have to:
+
+1. Handle overdraft, i.e., we allow that accounts become negative.
+2. Protection against cheating parties (neither Byzantine errors nor crash errors).
+
+## Exercise 9.11 
+(Software Wallet) 
+
+Use your solution from Exercise 6.10 to create a software wallet for an RSA secret key. 
+It should have these functions:
+
+1. Generate(filename string, password string) string which generates a
+public key and secret key and places the secret key on disk in the file with
+filename in filename encrypted under the password in password. The function
+returns the public key.
+2. Sign(filename string, password string, msg []byte) Signature which
+if the filename and password match that of Generate will sign msg and return
+the signature. You pick what the type Signature is.
+
+Your solution should:
+
+1. Make measures that make it costly for an adversary which gets its hands on
+the keyfile to bruteforce the password.
+2. Describe clearly what measure have been taken.
+3. Explain why the system was designed the way it was and, in particular, argue
+why the system achieves the desired security properties.
+4. Test the system and describe how it was tested.
+5. Describe how your TA can run the system and how to run the test.
