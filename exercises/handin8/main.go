@@ -27,7 +27,7 @@ var wg sync.WaitGroup
 
 func main() {
 	firstPeer := askPeer()
-	var kbCh = make(chan Transaction)
+	var kbCh = make(chan SignedTransaction)
 	var listenCh = make(chan SignedTransaction)
 	var quitCh = make(chan struct{})
 
@@ -224,22 +224,22 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction) {
 	}
 }
 
-func processTransactions(kbCh <-chan Transaction, listenCh <-chan SignedTransaction, quitCh <-chan struct{}) {
+func processTransactions(kbCh <-chan SignedTransaction, listenCh <-chan SignedTransaction, quitCh <-chan struct{}) {
 	defer wg.Done()
 
 	for {
 		select {
-		case t := <-kbCh:
+		case st := <-kbCh:
 			fmt.Println("Processing transaction")
-			t = attachNextID(t)
-			if updateLedger(t) {
+			if t := ExtractTransaction(st); !isOld(st) && isVerified(st) {
+				updateLedger(t)
 				fmt.Println("Sent ", t)
 				fmt.Println(ledger)
-				st := signTransaction(t)
 				broadcast(st)
 			}
 		case st := <-listenCh:
-			if t := ExtractTransaction(st); !isOld(st) && isVerified(st) && updateLedger(t) {
+			if t := ExtractTransaction(st); !isOld(st) && isVerified(st) {
+				updateLedger(t)
 				fmt.Println("Received", t)
 				fmt.Println(ledger)
 				broadcast(st)
@@ -259,25 +259,20 @@ func isOld(st SignedTransaction) bool {
 }
 
 func isVerified(st SignedTransaction) bool {
-	return st.VerifyTransaction()
+	return st.VerifyTransaction() && st.Amount > 0
 }
 
 func attachNextID(t Transaction) Transaction {
-	t.ID = fmt.Sprintf("%s-%d", localPeer.GetAddress(), ledger.GetClock())
+	t.ID = fmt.Sprintf("%d-%s", ledger.GetClock(), localPeer.GetAddress())
 	return t
 }
 
-func signTransaction(t Transaction) SignedTransaction {
-	return SignTransaction(t, localKeys.Private)
+func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
+	return SignTransaction(t, k)
 }
 
-func updateLedger(t Transaction) bool {
-	err := ledger.TransactionWithBalanceCheck(t)
-	if err != nil {
-		fmt.Println(err.Error())
-		return false
-	}
-	return true
+func updateLedger(t Transaction) {
+	ledger.Transaction(t)
 }
 
 func broadcast(st SignedTransaction) {
@@ -289,12 +284,12 @@ func broadcast(st SignedTransaction) {
 	}
 }
 
-func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
+func write(kbCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 	defer wg.Done()
 
-	fmt.Println("Insert a transaction as ToWhom HowMuch")
+	fmt.Println("Insert a transaction as: FromWhom ToWhom HowMuch each on different lines, then the private key to sign it ")
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Split(bufio.ScanWords)
+	scanner.Split(bufio.ScanLines)
 
 	for {
 		t, quit := askTransaction(scanner)
@@ -303,14 +298,22 @@ func write(kbCh chan<- Transaction, quitCh chan<- struct{}) {
 			close(quitCh)
 			break //Done
 		}
-		kbCh <- t
+		t = attachNextID(t)
+		key := aesrsa.KeyFromString(scanKey(scanner))
+		st := signTransaction(t, key)
+		kbCh <- st
 	}
 }
 
 func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 
-	scanner.Scan()
-	to := scanner.Text()
+	from := scanKey(scanner)
+
+	if from == "quit" {
+		return Transaction{}, true
+	}
+
+	to := scanKey(scanner)
 
 	if to == "quit" {
 		return Transaction{}, true
@@ -324,6 +327,7 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 	}
 
 	intAmount, err := strconv.Atoi(amount)
+
 	for err != nil {
 		fmt.Println("not valid integer amount")
 		scanner.Scan()
@@ -337,7 +341,33 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 	}
 
 	return Transaction{
-		From:   aesrsa.KeyToString(localKeys.Public),
+		From:   from,
 		To:     to,
 		Amount: intAmount}, false
+}
+
+func scanKey(scanner *bufio.Scanner) string {
+	scanner.Scan()
+	buf := scanner.Text()
+
+	for buf != "-----BEGIN KEY-----" {
+		scanner.Scan()
+		buf = scanner.Text()
+	}
+
+	key := buf + "\n"
+
+	scanner.Scan()
+	buf = scanner.Text()
+
+	for buf != "-----END KEY-----" {
+		key += buf
+
+		scanner.Scan()
+		buf = scanner.Text()
+	}
+
+	key += "\n" + buf
+
+	return key
 }
