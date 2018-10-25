@@ -17,12 +17,8 @@ func check(e error) {
 
 // encryptAES returns the ciphertext  of the plain text given the key in bytes
 func encryptAES(pt, key []byte) []byte {
-	// padding key to make aes-256
-	pwBytes, err := pkcs7Pad(key, 16)
-	check(err)
-
 	// creating block
-	block, err := aes.NewCipher(pwBytes)
+	block, err := aes.NewCipher(key)
 	check(err)
 
 	// padding plainttext to match blocksize
@@ -48,12 +44,12 @@ func encryptAES(pt, key []byte) []byte {
 
 // decryptAES returns the ciphertext  of the plain text given the key in bytes
 func decryptAES(ct, key []byte) []byte {
-	// padding key
-	pwBytes, err := pkcs7Pad(key, 16)
-	check(err)
+	// // padding key
+	// pwBytes, err := pkcs7Pad(key, 32)
+	// check(err)
 
 	// creating block
-	block, err := aes.NewCipher(pwBytes)
+	block, err := aes.NewCipher(key)
 	check(err)
 
 	// dividing IV and proper ct
@@ -79,8 +75,12 @@ func decryptAES(ct, key []byte) []byte {
 
 // EncryptToFile to a given file an input string given an AES-key
 func EncryptToFile(pt []byte, fout, pw string) {
-	ct := encryptAES(pt, []byte(pw))
-	err := ioutil.WriteFile(fout, ct, 0644)
+	// padding key to make aes-256
+	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	check(err)
+
+	ct := encryptAES(pt, pwBytes)
+	err = ioutil.WriteFile(fout, ct, 0644)
 	check(err)
 }
 
@@ -89,7 +89,11 @@ func DecryptFromFile(fin, pw string) []byte {
 	ct, err := ioutil.ReadFile(fin)
 	check(err)
 
-	return decryptAES(ct, []byte(pw))
+	// padding key to make aes-256
+	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	check(err)
+
+	return decryptAES(ct, pwBytes)
 
 }
 

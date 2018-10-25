@@ -41,7 +41,7 @@ func Generate(filename string, password string) string {
 	_, err = rand.Read(salt)
 	check(err)
 
-	keyAes := pbkdf2.Key([]byte(password), salt, 4096, 16, sha256.New)
+	keyAes := pbkdf2.Key([]byte(password), salt, 4096, 32, sha256.New)
 
 	ct := encryptAES(pt, keyAes)
 
@@ -59,7 +59,7 @@ func Sign(filename string, password string, msg []byte) []byte {
 	salt := ct[:saltSize]
 	ct = ct[saltSize:]
 
-	keyAes := pbkdf2.Key([]byte(password), salt, 4096, 16, sha256.New)
+	keyAes := pbkdf2.Key([]byte(password), salt, 4096, 32, sha256.New)
 
 	privKey := KeyFromString(string(decryptAES(ct, keyAes)))
 
