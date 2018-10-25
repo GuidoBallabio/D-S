@@ -15,10 +15,10 @@ func check(e error) {
 	}
 }
 
-// EncryptToFile to a given file an input string given an AES-key
-func EncryptToFile(pt []byte, fout, pw string) {
+// encryptAES returns the ciphertext  of the plain text given the key in bytes
+func encryptAES(pt, key []byte) []byte {
 	// padding key to make aes-256
-	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	pwBytes, err := pkcs7Pad(key, 16)
 	check(err)
 
 	// creating block
@@ -43,17 +43,13 @@ func EncryptToFile(pt []byte, fout, pw string) {
 	// encrypting message but not iv
 	streamCipher.XORKeyStream(ct[aes.BlockSize:], pt)
 
-	err = ioutil.WriteFile(fout, ct, 0644)
-	check(err)
+	return ct
 }
 
-// DecryptFromFile to a given file an input string given an AES-key
-func DecryptFromFile(fin, pw string) []byte {
-	ct, err := ioutil.ReadFile(fin)
-	check(err)
-
+// decryptAES returns the ciphertext  of the plain text given the key in bytes
+func decryptAES(ct, key []byte) []byte {
 	// padding key
-	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	pwBytes, err := pkcs7Pad(key, 16)
 	check(err)
 
 	// creating block
@@ -79,6 +75,22 @@ func DecryptFromFile(fin, pw string) []byte {
 	check(err)
 
 	return pt
+}
+
+// EncryptToFile to a given file an input string given an AES-key
+func EncryptToFile(pt []byte, fout, pw string) {
+	ct := encryptAES(pt, []byte(pw))
+	err := ioutil.WriteFile(fout, ct, 0644)
+	check(err)
+}
+
+// DecryptFromFile to a given file an input string given an AES-key
+func DecryptFromFile(fin, pw string) []byte {
+	ct, err := ioutil.ReadFile(fin)
+	check(err)
+
+	return decryptAES(ct, []byte(pw))
+
 }
 
 // This two function below have been copied from https://github.com/go-web/tokenizer/blob/master/pkcs7.go

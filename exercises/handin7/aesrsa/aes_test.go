@@ -9,7 +9,7 @@ import (
 func TestEncryptDecryptFile(t *testing.T) {
 	file := "ciphertext"
 	pw := "password"
-	ptKeys, err := KeyGen(10)
+	ptKeys, err := KeyGen(1024)
 	checkTest(err, t)
 
 	pt, err := json.Marshal(ptKeys.Private)

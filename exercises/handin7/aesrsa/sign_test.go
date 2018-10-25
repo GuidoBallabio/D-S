@@ -6,7 +6,7 @@ import (
 )
 
 func TestSignatureVerify(t *testing.T) {
-	keys, err := KeyGen(1024)
+	keys, err := KeyGen(2048)
 	checkTest(err, t)
 
 	pt := big.NewInt(84).Bytes()
