@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	. "./account"
 	"./aesrsa"
@@ -122,7 +123,7 @@ func becomeSequencer() {
 }
 
 func checkIfSequencer() bool {
-	return sequencerSecret == aesrsa.RSAKey{}
+	return sequencerSecret != aesrsa.RSAKey{}
 }
 
 func connect(peer Peer) (net.Conn, error) {
@@ -298,7 +299,6 @@ func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 				}
 			}
 		case <-quitCh:
-			connect(localPeer)
 			return //Done
 		}
 	}
@@ -342,8 +342,10 @@ func write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 		if quit {
 			fmt.Println("quitting...")
 			close(quitCh)
+			connect(localPeer)
 			break //Done
 		}
+		fmt.Println(t)
 		t = attachNextID(t)
 		key := aesrsa.KeyFromString(scanKey(scanner))
 		st := signTransaction(t, key)
@@ -419,22 +421,19 @@ func scanKey(scanner *bufio.Scanner) string {
 }
 
 // processBlocks applys blocks of transactions to the ledger
-func processBlocks(blockCh chan<- SignedBlock, quitCh <-chan struct{}) {
+func processBlocks(blockCh <-chan SignedBlock, quitCh <-chan struct{}) {
 	defer wg.Done()
 
 	for {
 		select {
 		case sb := <-blockCh:
-			if b := st.ExtractBlock(); sb.Verified() {
-				if isFuture(b) {
-					if isNext(b) {
-						updateLedger(b)
-					}
-					broadcastBlock(sb)
+			if b := sb.ExtractBlock(); sb.VerifyBlock(sequencer) && isFuture(b) {
+				if isNext(b) {
+					updateLedger(b)
 				}
+				broadcastBlock(sb)
 			}
 		case <-quitCh:
-			connect(localPeer)
 			return //Done
 		}
 	}
@@ -458,7 +457,8 @@ func updateLedger(b Block) {
 	}
 }
 
-func broadcastBlocks(sb SignedBlock) {
+// broadcast a signed block
+func broadcastBlock(sb SignedBlock) {
 	for enc := range peersList.IterEnc() {
 		enc.Encode(&sb)
 	}
@@ -468,4 +468,28 @@ func broadcastBlocks(sb SignedBlock) {
 func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 	defer wg.Done()
 
+	fmt.Println("The Sequencer")
+
+	var n int
+	ticker := time.NewTicker(time.Second * 10)
+
+	for {
+		seq := make([]string, 0)
+		endBlock := false
+		for !endBlock {
+			select {
+			case <-ticker.C:
+				if len(seq[:]) > 0 {
+					sb := NewSignedBlock(n, seq)
+					broadcastBlock(*sb)
+					n = n + 1
+					endBlock = true
+				}
+			case t := <-sequencerCh:
+				seq = append(seq, t.ID)
+			case <-quitCh:
+				return //Done
+			}
+		}
+	}
 }
