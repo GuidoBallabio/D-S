@@ -62,6 +62,11 @@ func (st SignedTransaction) VerifyTransaction() bool {
 	return aesrsa.VerifyRSA(jsonT, sign, aesrsa.KeyFromString(st.From))
 }
 
+// WhatType returns "Block" for SignedTransaction type
+func (st SignedTransaction) WhatType() string {
+	return "SignedTransaction"
+}
+
 func (st SignedTransaction) String() string {
 	return fmt.Sprintf("Transaction: ID %s, From %s To %s, Amount %d, Signature %s", st.ID, st.From, st.To, st.Amount, st.Signature)
 }
