@@ -145,10 +145,12 @@ func (aslice *AtomicSortedSlice) IterEnc() <-chan *gob.Encoder {
 		aslice.rwLock.RLock()
 		defer aslice.rwLock.RUnlock()
 		for _, value := range aslice.data {
-			if value.conn != nil && value.enc == nil {
-				value.enc = gob.NewEncoder(value.conn)
+			if value.conn != nil {
+				if value.enc == nil {
+					value.enc = gob.NewEncoder(value.conn)
+				}
+				c <- value.enc
 			}
-			c <- value.enc
 
 		}
 		close(c)

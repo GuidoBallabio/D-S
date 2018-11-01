@@ -26,6 +26,7 @@ var sequencerSecret aesrsa.RSAKey
 var peersList = NewList()
 var ledger = NewLedger()
 var past = make(map[string]bool, 1)
+var inTransit = NewTransactionMap()
 var wg sync.WaitGroup
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 	wg.Add(4)
 	go beServer(listenCh, blockCh, quitCh)
 	go processTransactions(listenCh, sequencerCh, quitCh)
-	// go processBlocks(blockCh, quitCh)
+	go processBlocks(blockCh, quitCh)
 	go write(listenCh, quitCh)
 
 	if checkIfSequencer() {
@@ -259,7 +260,7 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Blo
 	dec := gob.NewDecoder(peer.GetConn())
 
 	for {
-		var obj WhatType
+		var obj SignedTransaction
 		err := dec.Decode(&obj)
 
 		if err != nil {
@@ -268,11 +269,12 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Blo
 			peersList.Remove(peer)
 			break //Done
 		} else {
+			fmt.Println(obj)
 			switch obj.WhatType() {
 			case "SignedTransaction":
-				listenCh <- obj.(SignedTransaction)
+				listenCh <- obj
 			case "Block":
-				blockCh <- obj.(Block)
+				//blockCh <- obj
 			}
 		}
 	}
@@ -285,10 +287,12 @@ func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 		select {
 		case st := <-listenCh:
 			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
-				updateLedger(t)
-				fmt.Println(ledger)
+				inTransit.AddTransaction(t)
 				past[st.ID] = true
 				broadcast(st)
+				if checkIfSequencer() {
+					sequencerCh <- t
+				}
 			}
 		case <-quitCh:
 			connect(localPeer)
@@ -416,6 +420,27 @@ func scanKey(scanner *bufio.Scanner) string {
 }
 
 // processBlocks applys blocks of transactions to the ledger
+func processBlocks(blockCh chan<- Block, quitCh <-chan struct{}){
+	defer wg.Done()
+
+	for {
+		select {
+		case b := <-blockCh:
+			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
+				inTransit.AddTransaction(t)
+				past[st.ID] = true
+				broadcast(st)
+				if checkIfSequencer() {
+					sequencerCh <- t
+				}
+			}
+		case <-quitCh:
+			connect(localPeer)
+			return //Done
+		}
+	}
+
+}
 
 // beSequencer add the beheaviour of a sequencer to the peer
 func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
