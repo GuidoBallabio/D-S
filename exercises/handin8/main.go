@@ -256,8 +256,9 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Blo
 	defer wg.Done()
 	defer peer.GetConn().Close()
 
+	dec := gob.NewDecoder(peer.GetConn())
+
 	for {
-		dec := gob.NewDecoder(peer.GetConn())
 		var obj WhatType
 		err := dec.Decode(&obj)
 
@@ -321,8 +322,7 @@ func updateLedger(t Transaction) {
 }
 
 func broadcast(st SignedTransaction) {
-	for conn := range peersList.IterConn() {
-		enc := gob.NewEncoder(conn)
+	for enc := range peersList.IterEnc() {
 		enc.Encode(&st)
 	}
 }

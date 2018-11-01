@@ -1,6 +1,7 @@
 package peers
 
 import (
+	"encoding/gob"
 	"errors"
 	"net"
 	"sort"
@@ -128,6 +129,27 @@ func (aslice *AtomicSortedSlice) IterConn() <-chan net.Conn {
 			if value.conn != nil {
 				c <- value.conn
 			}
+		}
+		close(c)
+	}
+	go f()
+
+	return c
+}
+
+// IterEnc iterates over the available connections of the peers
+func (aslice *AtomicSortedSlice) IterEnc() <-chan *gob.Encoder {
+	c := make(chan *gob.Encoder)
+
+	f := func() {
+		aslice.rwLock.RLock()
+		defer aslice.rwLock.RUnlock()
+		for _, value := range aslice.data {
+			if value.conn != nil && value.enc == nil {
+				value.enc = gob.NewEncoder(value.conn)
+			}
+			c <- value.enc
+
 		}
 		close(c)
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"encoding/gob"
 )
 
 // Peer is an object representing peers connections
@@ -12,6 +13,7 @@ type Peer struct {
 	Port   int
 	PubKey string
 	conn   net.Conn
+	enc	   *gob.Encoder
 }
 
 // newPeer is the constructor of the Peer type
