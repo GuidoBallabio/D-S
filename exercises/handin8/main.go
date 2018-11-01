@@ -29,18 +29,25 @@ var past = make(map[string]bool, 1)
 var wg sync.WaitGroup
 
 func main() {
-	firstPeer := askPeer()
-	var kbCh = make(chan SignedTransaction)
 	var listenCh = make(chan SignedTransaction)
+	var blockCh = make(chan Block)
+	var sequencerCh = make(chan SignedTransaction)
 	var quitCh = make(chan struct{})
 
+	firstPeer := askPeer()
 	createKeys()
-	connectToNetwork(firstPeer, listenCh)
+	connectToNetwork(firstPeer, listenCh, blockCh)
 
-	wg.Add(3)
-	go beServer(listenCh, quitCh)
-	go processTransactions(kbCh, listenCh, quitCh)
-	go write(kbCh, quitCh)
+	wg.Add(4)
+	go beServer(listenCh, blockCh, quitCh)
+	go processTransactions(listenCh, sequencerCh, quitCh)
+	go processBlocks(blockCh, quitCh)
+	go write(listenCh, quitCh)
+
+	if sequencerSecret != nil{
+		wg.add(1)
+		go beSequencer(sequencerCh, quitCh)
+	}
 
 	<-quitCh
 	wg.Wait()
@@ -77,22 +84,27 @@ func createKeys() {
 	fmt.Println(aesrsa.KeyToString(localKeys.Public))
 }
 
-func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction) {
+func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
 	conn1, err := connect(peer)
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
 		localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
 		peersList.SortedInsert(localPeer)
-		handleFirstConn(conn1, listenCh)
+		handleFirstConn(conn1, listenCh, blockCh)
 	} else {
 		fmt.Println(err.Error())
 		localPeer = GetLocalPeer(defaultPort, aesrsa.KeyToString(localKeys.Public))
 		peersList.SortedInsert(localPeer)
-		go beSequencer()
+		wg.Add(1)
+		becomeSequencer()
 		fmt.Println("Initializing your own network")
 	}
 
 	fmt.Println("Your IP is:", localPeer.IP, "with open port:", localPeer.GetPort())
+}
+
+func becomeSequencer(){
+
 }
 
 func connect(peer Peer) (net.Conn, error) {
@@ -102,7 +114,7 @@ func connect(peer Peer) (net.Conn, error) {
 	return net.Dial("tcp", peer.GetAddress())
 }
 
-func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction) {
+func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
 
 	// asking for list of peers
 	signalAsk(conn)
@@ -133,7 +145,7 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction) {
 				p.AddConn(conn1)
 				signalNoAsk(conn1)
 				wg.Add(1)
-				go handleConn(p, listenCh)
+				go handleConn(p, listenCh, blockCh)
 			}
 			i++
 		}
@@ -157,14 +169,17 @@ func signalNoAsk(conn net.Conn) {
 func getSequencer(conn net.Conn) {
 	dec := gob.NewDecoder(conn)
 	key := aesrsa.RSAKey{}
-	err := dec.Decode(key)
+	err := dec.Decode(&key)
+	if err != nil {
+		panic(err)
+	}
 
 	sequencer = key
 }
 
-func beServer(listenCh chan<- SignedTransaction, quitCh <-chan struct{}) {
-	defer wg.Done()
+func beServer(listenCh chan<- SignedTransaction, blockCh chan<- Block, quitCh <-chan struct{}) {
 	defer fmt.Println("server closed")
+	defer wg.Done()
 
 	ln, err := net.Listen("tcp", ":"+localPeer.GetPort())
 	if err != nil {
@@ -184,7 +199,7 @@ func beServer(listenCh chan<- SignedTransaction, quitCh <-chan struct{}) {
 		default:
 			if p, firstConn := checkAsk(conn); !firstConn {
 				wg.Add(1)
-				go handleConn(p, listenCh)
+				go handleConn(p, listenCh, blockCh)
 			}
 		}
 	}
@@ -222,15 +237,15 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 	return Peer{}, true
 }
 
-func handleConn(peer Peer, listenCh chan<- SignedTransaction) {
+func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
 	fmt.Println("Connected to", peer)
 	defer wg.Done()
 	defer peer.GetConn().Close()
 
 	for {
 		dec := gob.NewDecoder(peer.GetConn())
-		st := SignedTransaction{}
-		err := dec.Decode(&st)
+		obj := WhatType{}
+		err := dec.Decode(&obj)
 
 		if err != nil {
 			fmt.Println(err)
@@ -238,7 +253,11 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction) {
 			peersList.Remove(peer)
 			break //Done
 		} else {
-			listenCh <- st
+			if obj.WhatType() == "Transaction"{
+				listenCh <- obj.(SignedTransaction)
+			} else {
+				blockCh <- obj.(Block)
+			}
 		}
 	}
 }
@@ -389,4 +408,12 @@ func scanKey(scanner *bufio.Scanner) string {
 	key += "\n" + buf
 
 	return key
+}
+
+// beSequencer add the beheaviour of a sequencer to the peer
+func beSequencer() {
+	defer wg.Done()
+
+
+
 }
