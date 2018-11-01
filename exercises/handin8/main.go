@@ -20,18 +20,21 @@ const defaultPort int = 4444
 var localPeer Peer
 var localKeys *aesrsa.RSAKeyPair
 
-var sequencer aesrsa.RSAKey
-var sequencerSecret aesrsa.RSAKey
-
 var peersList = NewList()
 var ledger = NewLedger()
 var past = make(map[string]bool, 1)
+
+var sequencer aesrsa.RSAKey
+var sequencerSecret aesrsa.RSAKey
+
 var inTransit = NewTransactionMap()
+var lastBlock int
+
 var wg sync.WaitGroup
 
 func main() {
 	var listenCh = make(chan SignedTransaction)
-	var blockCh = make(chan Block)
+	var blockCh = make(chan SignedBlock)
 	var sequencerCh = make(chan Transaction)
 	var quitCh = make(chan struct{})
 
@@ -85,7 +88,7 @@ func createKeys() {
 	fmt.Println(aesrsa.KeyToString(localKeys.Public))
 }
 
-func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
+func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 	conn1, err := connect(peer)
 
 	gob.Register(&Block{})
@@ -129,7 +132,7 @@ func connect(peer Peer) (net.Conn, error) {
 	return net.Dial("tcp", peer.GetAddress())
 }
 
-func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
+func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 
 	// asking for list of peers
 	signalAsk(conn)
@@ -192,7 +195,7 @@ func getSequencer(conn net.Conn) {
 	sequencer = key
 }
 
-func beServer(listenCh chan<- SignedTransaction, blockCh chan<- Block, quitCh <-chan struct{}) {
+func beServer(listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock, quitCh <-chan struct{}) {
 	defer fmt.Println("server closed")
 	defer wg.Done()
 
@@ -252,7 +255,7 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 	return Peer{}, true
 }
 
-func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Block) {
+func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 	fmt.Println("Connected to", peer)
 	defer wg.Done()
 	defer peer.GetConn().Close()
@@ -319,10 +322,6 @@ func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
 func attachNextID(t Transaction) Transaction {
 	t.ID = fmt.Sprintf("%d-%s", ledger.GetClock(), localPeer.GetAddress())
 	return t
-}
-
-func updateLedger(t Transaction) {
-	ledger.Transaction(t)
 }
 
 func broadcast(st SignedTransaction) {
@@ -420,18 +419,18 @@ func scanKey(scanner *bufio.Scanner) string {
 }
 
 // processBlocks applys blocks of transactions to the ledger
-func processBlocks(blockCh chan<- Block, quitCh <-chan struct{}){
+func processBlocks(blockCh chan<- SignedBlock, quitCh <-chan struct{}) {
 	defer wg.Done()
 
 	for {
 		select {
-		case b := <-blockCh:
-			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
-				inTransit.AddTransaction(t)
-				past[st.ID] = true
-				broadcast(st)
-				if checkIfSequencer() {
-					sequencerCh <- t
+		case sb := <-blockCh:
+			if b := st.ExtractBlock(); sb.Verified() {
+				if isFuture(b) {
+					if isNext(b) {
+						updateLedger(b)
+					}
+					broadcastBlock(sb)
 				}
 			}
 		case <-quitCh:
@@ -440,6 +439,29 @@ func processBlocks(blockCh chan<- Block, quitCh <-chan struct{}){
 		}
 	}
 
+}
+
+// isFuture tells if it's already been processed
+func isFuture(b Block) bool {
+	return b.Number >= lastBlock+1
+}
+
+// isNext tells if it's the next block to be processed
+func isNext(b Block) bool {
+	return b.Number == lastBlock+1
+}
+
+// Applys every transaction from a block
+func updateLedger(b Block) {
+	for _, id := range b.TransList {
+		ledger.Transaction(inTransit.GetTransaction(id))
+	}
+}
+
+func broadcastBlocks(sb SignedBlock) {
+	for enc := range peersList.IterEnc() {
+		enc.Encode(&sb)
+	}
 }
 
 // beSequencer add the beheaviour of a sequencer to the peer
