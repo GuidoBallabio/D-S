@@ -27,7 +27,7 @@ func NewSignedTransaction(ID, From, To string, Amount int) *SignedTransaction {
 }
 
 // ExtractTransaction extracts the transaction from the signed one
-func ExtractTransaction(st SignedTransaction) Transaction {
+func (st SignedTransaction) ExtractTransaction() Transaction {
 	return Transaction{
 		ID:     st.ID,
 		From:   st.From,
@@ -52,7 +52,7 @@ func SignTransaction(t Transaction, privKey aesrsa.RSAKey) SignedTransaction {
 
 // VerifyTransaction verifies that a transaction signature corresponds to the sender
 func (st SignedTransaction) VerifyTransaction() bool {
-	t := ExtractTransaction(st)
+	t := st.ExtractTransaction()
 	jsonT, err := json.Marshal(t)
 	check(err)
 

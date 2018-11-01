@@ -20,6 +20,9 @@ const defaultPort int = 4444
 var localPeer Peer
 var localKeys *aesrsa.RSAKeyPair
 
+var sequencer aesrsa.RSAKey
+var sequencerSecret aesrsa.RSAKey
+
 var peersList = NewList()
 var ledger = NewLedger()
 var past = make(map[string]bool, 1)
@@ -85,6 +88,7 @@ func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction) {
 		fmt.Println(err.Error())
 		localPeer = GetLocalPeer(defaultPort, aesrsa.KeyToString(localKeys.Public))
 		peersList.SortedInsert(localPeer)
+		go beSequencer()
 		fmt.Println("Initializing your own network")
 	}
 
@@ -102,6 +106,9 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction) {
 
 	// asking for list of peers
 	signalAsk(conn)
+
+	getSequencer(conn)
+
 	dec := gob.NewDecoder(conn)
 	p := Peer{}
 	err := dec.Decode(p)
@@ -144,6 +151,15 @@ func signalAsk(conn net.Conn) {
 func signalNoAsk(conn net.Conn) {
 	enc := gob.NewEncoder(conn)
 	enc.Encode(localPeer)
+}
+
+// getSequencer receive the sequencer's public key
+func getSequencer(conn net.Conn) {
+	dec := gob.NewDecoder(conn)
+	key := aesrsa.RSAKey{}
+	err := dec.Decode(key)
+
+	sequencer = key
 }
 
 func beServer(listenCh chan<- SignedTransaction, quitCh <-chan struct{}) {
@@ -189,6 +205,9 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 	if err == nil {
 		if p.Port == -1 {
 			enc := gob.NewEncoder(conn)
+
+			enc.Encode(sequencer)
+
 			for p := range peersList.Iter() {
 				enc.Encode(p)
 			}
@@ -231,16 +250,16 @@ func processTransactions(kbCh <-chan SignedTransaction, listenCh <-chan SignedTr
 		select {
 		case st := <-kbCh:
 			fmt.Println("Processing transaction")
-			if t := ExtractTransaction(st); !isOld(st) && isVerified(st) {
+			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
 				updateLedger(t)
-				fmt.Println("Sent ", t)
+				fmt.Println("Sent:\n", t)
 				fmt.Println(ledger)
 				broadcast(st)
 			}
 		case st := <-listenCh:
-			if t := ExtractTransaction(st); !isOld(st) && isVerified(st) {
+			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
 				updateLedger(t)
-				fmt.Println("Received", t)
+				fmt.Println("Received:\n", t)
 				fmt.Println(ledger)
 				broadcast(st)
 			}
@@ -262,13 +281,13 @@ func isVerified(st SignedTransaction) bool {
 	return st.VerifyTransaction() && st.Amount > 0
 }
 
+func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
+	return SignTransaction(t, k)
+}
+
 func attachNextID(t Transaction) Transaction {
 	t.ID = fmt.Sprintf("%d-%s", ledger.GetClock(), localPeer.GetAddress())
 	return t
-}
-
-func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
-	return SignTransaction(t, k)
 }
 
 func updateLedger(t Transaction) {

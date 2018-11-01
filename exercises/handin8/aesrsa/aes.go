@@ -15,14 +15,10 @@ func check(e error) {
 	}
 }
 
-// EncryptToFile to a given file an input string given an AES-key
-func EncryptToFile(pt []byte, fout, pw string) {
-	// padding key to make aes-256
-	pwBytes, err := pkcs7Pad([]byte(pw), 32)
-	check(err)
-
+// encryptAES returns the ciphertext  of the plain text given the key in bytes
+func encryptAES(pt, key []byte) []byte {
 	// creating block
-	block, err := aes.NewCipher(pwBytes)
+	block, err := aes.NewCipher(key)
 	check(err)
 
 	// padding plainttext to match blocksize
@@ -43,21 +39,17 @@ func EncryptToFile(pt []byte, fout, pw string) {
 	// encrypting message but not iv
 	streamCipher.XORKeyStream(ct[aes.BlockSize:], pt)
 
-	err = ioutil.WriteFile(fout, ct, 0644)
-	check(err)
+	return ct
 }
 
-// DecryptFromFile to a given file an input string given an AES-key
-func DecryptFromFile(fin, pw string) []byte {
-	ct, err := ioutil.ReadFile(fin)
-	check(err)
-
-	// padding key
-	pwBytes, err := pkcs7Pad([]byte(pw), 32)
-	check(err)
+// decryptAES returns the ciphertext  of the plain text given the key in bytes
+func decryptAES(ct, key []byte) []byte {
+	// // padding key
+	// pwBytes, err := pkcs7Pad(key, 32)
+	// check(err)
 
 	// creating block
-	block, err := aes.NewCipher(pwBytes)
+	block, err := aes.NewCipher(key)
 	check(err)
 
 	// dividing IV and proper ct
@@ -79,6 +71,30 @@ func DecryptFromFile(fin, pw string) []byte {
 	check(err)
 
 	return pt
+}
+
+// EncryptToFile to a given file an input string given an AES-key
+func EncryptToFile(pt []byte, fout, pw string) {
+	// padding key to make aes-256
+	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	check(err)
+
+	ct := encryptAES(pt, pwBytes)
+	err = ioutil.WriteFile(fout, ct, 0644)
+	check(err)
+}
+
+// DecryptFromFile to a given file an input string given an AES-key
+func DecryptFromFile(fin, pw string) []byte {
+	ct, err := ioutil.ReadFile(fin)
+	check(err)
+
+	// padding key to make aes-256
+	pwBytes, err := pkcs7Pad([]byte(pw), 32)
+	check(err)
+
+	return decryptAES(ct, pwBytes)
+
 }
 
 // This two function below have been copied from https://github.com/go-web/tokenizer/blob/master/pkcs7.go

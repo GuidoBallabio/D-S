@@ -232,3 +232,32 @@ the keyfile to bruteforce the password.
 why the system achieves the desired security properties.
 4. Test the system and describe how it was tested.
 5. Describe how your TA can run the system and how to run the test.
+
+## Exercise 10.1 
+(Total Order by Sequencer) 
+
+Start from your solution in Exercise 6.13 and make it into a system with total order using the following idea:
+
+1. Your system runs in two phases. In phase 1 the peers connect to the network. In phase 2 they can send signed transactions.
+2. The peer that started the network is a designated sequencer.
+3. The sequencer creates a special RSA key pair called the sequencer key pair.
+4. When connecting to a network the new client is informed who is the sequencer.
+5. It is the order in which the sequencer received the transactions that counts. This is communicated to the other peers as follows: Every 10 seconds the sequencer will take the transactions that it saw, but which have so far not been sequenced. Then it puts the IDs of those transactions into a block. A block has a block number and an ordered list of IDs, []string. It numbers the blocks 0, 1, . . . in the order they are sent. The sequencer signs the block and sends the block on the network.
+6. A client will accept a block if and only if it has the next block number it has not seen yet and the block is signed by the sequencer.
+7. All clients process the transactions they receive in the order chosen by the sequencer.
+8. A transaction is ignored if it would make the sending account negative.
+
+Your solution should describe:
+
+* How your system was designed and why.
+* How the TA can run your system.
+* Your test must try to send transaction at the same time at different peers to see if the system handles concurrent transactions correctly. A suggestion for one test could be: Have an account with 1, 000 coins on it. Have a program P 1 which at replica 1 repeatedly executes a transaction moving 1 coin from account A
+to B. It should send the transaction 1000 times. Have a program P 2 which at replica 2 repeatedly executes a transaction moving 1 coin from account A to C.
+It should send the transaction 1000 times. Run the two programs at the same time. Make sure that all replicas see the same number of coins end up on all
+accounts. check that account A is 0 when it is all done. If your system is too slow to do 2000 transactions, pick a lower number. But it is important that
+the test runs long enough that both programs are running at the time where account A hits 0.
+* How the system was tested and how to run your test if you did an automatic test.
+
+Your do not need to:
+* Handle errors, neither Byzantine nor crash errors. In particular, if the sequencer crashes, then the system is allowed to die.
+* You do not have to make your test automatic, but it is recommended
