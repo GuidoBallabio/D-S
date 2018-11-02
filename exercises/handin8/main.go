@@ -24,7 +24,7 @@ var localKeys *aesrsa.RSAKeyPair
 
 var peersList = NewList()
 var ledger = NewLedger()
-var past = make(map[string]bool, 1)
+var past = map[string]bool{}
 
 var sequencer aesrsa.RSAKey
 var sequencerSecret aesrsa.RSAKey
@@ -312,7 +312,7 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 			case "SignedTransaction":
 				listenCh <- *obj.(*SignedTransaction)
 			case "Block":
-				fmt.Println(obj, "a block")
+				fmt.Println(obj, "a block") //TODO
 				blockCh <- *obj.(*SignedBlock)
 			}
 		}
@@ -356,6 +356,7 @@ func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
 
 func attachNextID(t Transaction) Transaction {
 	t.ID = fmt.Sprintf("%d-%s", len(past), localPeer.GetAddress())
+	past[t.ID] = false
 	return t
 }
 
@@ -528,12 +529,14 @@ func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 			case <-ticker.C:
 				if len(seq[:]) > 0 {
 					sb := NewSignedBlock(n, seq)
+					fmt.Println("sequencer broadcasting:", sb)
 					broadcastBlock(*sb)
 					n++
 					endBlock = true
 				}
 			case t := <-sequencerCh:
 				seq = append(seq, t.ID)
+				fmt.Println("sequencer:", t.ID)
 			case <-quitCh:
 				return //Done
 			}
