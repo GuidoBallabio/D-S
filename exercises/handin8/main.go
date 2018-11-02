@@ -18,8 +18,6 @@ import (
 	. "./peers"
 )
 
-const defaultPort int = 4444
-
 var localPeer Peer
 var localKeys *aesrsa.RSAKeyPair
 
@@ -36,30 +34,29 @@ var lastBlock = -1
 var wg sync.WaitGroup
 
 func main() {
+
 	var (
 		keys = kingpin.Flag("keys", "Use predefined keys: first private then public").Short('k').Strings()
 
-		server = kingpin.Command("server", "Create your own network")
-		portServer = kingpin.Flag("port", "Port of server.").Short('p').Int()
+		server     = kingpin.Command("server", "Create your own network")
+		portServer = server.Flag("port", "Port of server.").Short('p').Default("4444").Int()
 
-		peer = kingpin.Command("connect", "Connect to a peer in a pre-eisting network.")
-		ip   = kingpin.Flag("ip", "IP address of Peer.").IP()
-		port = kingpin.Flag("port", "Port of Peer.").Short('p').Int()
+		peer = kingpin.Command("peer", "Connect to a peer in a pre-existing network.")
+		ip   = peer.Arg("ip", "IP address of Peer.").Required().IP()
+		port = peer.Arg("port", "Port of Peer.").Required().Int()
 	)
 
-	switch kingpin.Parse() {
-		case "server":
-		  println(*registerNick)
-	  
-		case "peer":
-		  if *postImage != nil {
-		  }
-		  if *postText != "" {
-		  }
-		}
+	kingpin.CommandLine.HelpFlag.Short('h')
 
-	if keys != nil {
+	cmd := kingpin.Parse()
 
+	var listenCh = make(chan SignedTransaction)
+	var blockCh = make(chan SignedBlock)
+
+	if *keys != nil {
+		localKeys = &aesrsa.RSAKeyPair{
+			Public:  aesrsa.KeyFromString((*keys)[1]),
+			Private: aesrsa.KeyFromString((*keys)[0])}
 	} else {
 		createKeys()
 	}
@@ -67,17 +64,24 @@ func main() {
 	gob.Register(&Block{})
 	gob.Register(&SignedTransaction{})
 
-	startServices()
+	switch cmd {
+	case "server":
+		wg.Add(1)
+		createNetwork(*portServer, listenCh, blockCh)
+
+	case "peer":
+		firstPeer := Peer{
+			IP:   ip.String(),
+			Port: *port}
+		connectToNetwork(firstPeer, listenCh, blockCh)
+	}
+
+	startServices(listenCh, blockCh)
 }
 
-func startServices() {
-	var listenCh = make(chan SignedTransaction)
-	var blockCh = make(chan SignedBlock)
+func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 	var sequencerCh = make(chan Transaction)
 	var quitCh = make(chan struct{})
-
-	firstPeer := askPeer()
-	connectToNetwork(firstPeer, listenCh, blockCh)
 
 	wg.Add(4)
 	go beServer(listenCh, blockCh, quitCh)
@@ -92,23 +96,6 @@ func startServices() {
 
 	<-quitCh
 	wg.Wait()
-}
-
-func askPeer() Peer {
-	var temp string
-
-	fmt.Println("Enter IP address:")
-	fmt.Scanln(&temp)
-
-	ip := net.ParseIP(temp)
-
-	fmt.Println("Enter port:")
-	fmt.Scanln(&temp)
-	port, _ := strconv.Atoi(temp)
-
-	return Peer{
-		IP:   ip.String(),
-		Port: port}
 }
 
 func createKeys() {
@@ -128,24 +115,23 @@ func createKeys() {
 func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 	conn1, err := connect(peer)
 
-	if err == nil {
-		fmt.Println("Connection to the network Succesfull")
-		localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
-		peersList.SortedInsert(localPeer)
-		handleFirstConn(conn1, listenCh, blockCh)
-	} else {
-		fmt.Println(err.Error())
-		createNetwork(listenCh, blockCh)
+	if err != nil {
+		panic(err.Error())
 	}
 
+	localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
+	fmt.Println("Connection to the network Succesfull")
+	peersList.SortedInsert(localPeer)
+	handleFirstConn(conn1, listenCh, blockCh)
 	fmt.Println("Your IP is:", localPeer.IP, "with open port:", localPeer.GetPort())
 }
 
-func createNetwork(listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock){
-	localPeer = GetLocalPeer(defaultPort, aesrsa.KeyToString(localKeys.Public))
+func createNetwork(port int, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
+	localPeer = GetLocalPeer(port, aesrsa.KeyToString(localKeys.Public))
 	peersList.SortedInsert(localPeer)
 	becomeSequencer()
 	fmt.Println("Initializing your own network")
+	fmt.Println("Your IP is:", localPeer.IP, "with open port:", localPeer.GetPort())
 }
 
 func becomeSequencer() {
@@ -521,7 +507,7 @@ func broadcastBlock(sb SignedBlock) {
 func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 	defer wg.Done()
 
-	fmt.Println("The Sequencer")
+	fmt.Println("You are the Sequencer")
 
 	var n int
 	ticker := time.NewTicker(time.Second * 10)
