@@ -68,5 +68,5 @@ func (st SignedTransaction) WhatType() string {
 }
 
 func (st SignedTransaction) String() string {
-	return fmt.Sprintf("Transaction: ID %s, From %s To %s, Amount %d, Signature %s", st.ID, st.From, st.To, st.Amount, st.Signature)
+	return fmt.Sprintf("SignedTransaction:\n%s,\nSignature %s", st.ExtractTransaction().String(), st.Signature)
 }

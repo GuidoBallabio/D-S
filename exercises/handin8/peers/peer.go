@@ -1,10 +1,10 @@
 package peers
 
 import (
+	"encoding/gob"
 	"fmt"
 	"net"
 	"strconv"
-	"encoding/gob"
 )
 
 // Peer is an object representing peers connections
@@ -13,7 +13,8 @@ type Peer struct {
 	Port   int
 	PubKey string
 	conn   net.Conn
-	enc	   *gob.Encoder
+	enc    *gob.Encoder
+	dec    *gob.Decoder
 }
 
 // newPeer is the constructor of the Peer type
@@ -27,6 +28,16 @@ func newPeer(IP string, Port int, conn net.Conn) Peer {
 // AddConn sets a conn to an existing peer
 func (peer *Peer) AddConn(conn net.Conn) {
 	peer.conn = conn
+}
+
+// AddEnc sets an encoder to an existing peer
+func (peer *Peer) AddEnc(enc *gob.Encoder) {
+	peer.enc = enc
+}
+
+// AddDec sets an decoder to an existing peer
+func (peer *Peer) AddDec(dec *gob.Decoder) {
+	peer.dec = dec
 }
 
 // AddPubKey sets a conn to an existing peer
@@ -47,6 +58,11 @@ func (peer *Peer) GetPort() string {
 // GetConn return the connection to the peer if available
 func (peer *Peer) GetConn() net.Conn {
 	return peer.conn
+}
+
+// GetDec return the decoder to the peer if available
+func (peer *Peer) GetDec() *gob.Decoder {
+	return peer.dec
 }
 
 // Less defines an order relationshIP for peers

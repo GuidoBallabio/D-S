@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	. "./account"
 	"./aesrsa"
 	. "./peers"
@@ -29,18 +31,52 @@ var sequencer aesrsa.RSAKey
 var sequencerSecret aesrsa.RSAKey
 
 var inTransit = NewTransactionMap()
-var lastBlock int
+var lastBlock = -1
 
 var wg sync.WaitGroup
 
 func main() {
+	var (
+		keys = kingpin.Flag("keys", "Use predefined keys: first private then public").Short('k').Strings()
+
+		server = kingpin.Command("server", "Create your own network")
+		portServer = kingpin.Flag("port", "Port of server.").Short('p').Int()
+
+		peer = kingpin.Command("connect", "Connect to a peer in a pre-eisting network.")
+		ip   = kingpin.Flag("ip", "IP address of Peer.").IP()
+		port = kingpin.Flag("port", "Port of Peer.").Short('p').Int()
+	)
+
+	switch kingpin.Parse() {
+		case "server":
+		  println(*registerNick)
+	  
+		case "peer":
+		  if *postImage != nil {
+		  }
+		  if *postText != "" {
+		  }
+		}
+
+	if keys != nil {
+
+	} else {
+		createKeys()
+	}
+
+	gob.Register(&Block{})
+	gob.Register(&SignedTransaction{})
+
+	startServices()
+}
+
+func startServices() {
 	var listenCh = make(chan SignedTransaction)
 	var blockCh = make(chan SignedBlock)
 	var sequencerCh = make(chan Transaction)
 	var quitCh = make(chan struct{})
 
 	firstPeer := askPeer()
-	createKeys()
 	connectToNetwork(firstPeer, listenCh, blockCh)
 
 	wg.Add(4)
@@ -92,9 +128,6 @@ func createKeys() {
 func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 	conn1, err := connect(peer)
 
-	gob.Register(&Block{})
-	gob.Register(&SignedTransaction{})
-
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
 		localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
@@ -102,13 +135,17 @@ func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan
 		handleFirstConn(conn1, listenCh, blockCh)
 	} else {
 		fmt.Println(err.Error())
-		localPeer = GetLocalPeer(defaultPort, aesrsa.KeyToString(localKeys.Public))
-		peersList.SortedInsert(localPeer)
-		becomeSequencer()
-		fmt.Println("Initializing your own network")
+		createNetwork(listenCh, blockCh)
 	}
 
 	fmt.Println("Your IP is:", localPeer.IP, "with open port:", localPeer.GetPort())
+}
+
+func createNetwork(listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock){
+	localPeer = GetLocalPeer(defaultPort, aesrsa.KeyToString(localKeys.Public))
+	peersList.SortedInsert(localPeer)
+	becomeSequencer()
+	fmt.Println("Initializing your own network")
 }
 
 func becomeSequencer() {
@@ -134,13 +171,14 @@ func connect(peer Peer) (net.Conn, error) {
 }
 
 func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
+	enc := gob.NewEncoder(conn)
+	dec := gob.NewDecoder(conn)
 
 	// asking for list of peers
-	signalAsk(conn)
+	signalAsk(enc)
 
-	getSequencer(conn)
+	getSequencer(dec)
 
-	dec := gob.NewDecoder(conn)
 	p := Peer{}
 	err := dec.Decode(p)
 	for p.Port != -1 {
@@ -162,7 +200,9 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh c
 			if err == nil {
 				peersList.AddConn(p, conn1)
 				p.AddConn(conn1)
-				signalNoAsk(conn1)
+				enc = gob.NewEncoder(conn1)
+				p.AddEnc(enc)
+				signalNoAsk(enc)
 				wg.Add(1)
 				go handleConn(p, listenCh, blockCh)
 			}
@@ -173,20 +213,17 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh c
 }
 
 // ask for list of peers
-func signalAsk(conn net.Conn) {
-	enc := gob.NewEncoder(conn)
+func signalAsk(enc *gob.Encoder) {
 	enc.Encode(Peer{IP: "", Port: -1})
 }
 
 // signal not asking for list of peers
-func signalNoAsk(conn net.Conn) {
-	enc := gob.NewEncoder(conn)
+func signalNoAsk(enc *gob.Encoder) {
 	enc.Encode(localPeer)
 }
 
 // getSequencer receive the sequencer's public key
-func getSequencer(conn net.Conn) {
-	dec := gob.NewDecoder(conn)
+func getSequencer(dec *gob.Decoder) {
 	key := aesrsa.RSAKey{}
 	err := dec.Decode(&key)
 	if err != nil {
@@ -250,6 +287,7 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 			return Peer{}, true
 		}
 		p.AddConn(conn)
+		p.AddDec(dec)
 		peersList.SortedInsert(*p)
 		return *p, false
 	}
@@ -261,10 +299,14 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 	defer wg.Done()
 	defer peer.GetConn().Close()
 
-	dec := gob.NewDecoder(peer.GetConn())
+	if peer.GetDec() == nil {
+		peer.AddDec(gob.NewDecoder(peer.GetConn()))
+	}
+
+	dec := peer.GetDec()
 
 	for {
-		var obj SignedTransaction
+		var obj WhatType
 		err := dec.Decode(&obj)
 
 		if err != nil {
@@ -273,12 +315,12 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 			peersList.Remove(peer)
 			break //Done
 		} else {
-			fmt.Println(obj)
+			fmt.Println(obj) //TODO
 			switch obj.WhatType() {
 			case "SignedTransaction":
-				listenCh <- obj
+				listenCh <- *obj.(*SignedTransaction)
 			case "Block":
-				//blockCh <- obj
+				blockCh <- *obj.(*SignedBlock)
 			}
 		}
 	}
@@ -325,8 +367,9 @@ func attachNextID(t Transaction) Transaction {
 }
 
 func broadcast(st SignedTransaction) {
+	var w WhatType = st
 	for enc := range peersList.IterEnc() {
-		enc.Encode(&st)
+		enc.Encode(&w)
 	}
 }
 
@@ -399,6 +442,9 @@ func scanKey(scanner *bufio.Scanner) string {
 	buf := scanner.Text()
 
 	for buf != "-----BEGIN KEY-----" {
+		if buf == "quit" {
+			return buf
+		}
 		scanner.Scan()
 		buf = scanner.Text()
 	}
@@ -409,6 +455,9 @@ func scanKey(scanner *bufio.Scanner) string {
 	buf = scanner.Text()
 
 	for buf != "-----END KEY-----" {
+		if buf == "quit" {
+			return buf
+		}
 		key += buf
 
 		scanner.Scan()
@@ -427,9 +476,12 @@ func processBlocks(blockCh <-chan SignedBlock, quitCh <-chan struct{}) {
 	for {
 		select {
 		case sb := <-blockCh:
+			fmt.Println(sb)
 			if b := sb.ExtractBlock(); sb.VerifyBlock(sequencer) && isFuture(b) {
 				if isNext(b) {
 					updateLedger(b)
+					lastBlock++
+					fmt.Println(ledger)
 				}
 				broadcastBlock(sb)
 			}
@@ -459,8 +511,9 @@ func updateLedger(b Block) {
 
 // broadcast a signed block
 func broadcastBlock(sb SignedBlock) {
+	var w WhatType = sb
 	for enc := range peersList.IterEnc() {
-		enc.Encode(&sb)
+		enc.Encode(&w)
 	}
 }
 
@@ -482,7 +535,7 @@ func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 				if len(seq[:]) > 0 {
 					sb := NewSignedBlock(n, seq)
 					broadcastBlock(*sb)
-					n = n + 1
+					n++
 					endBlock = true
 				}
 			case t := <-sequencerCh:
