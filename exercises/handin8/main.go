@@ -301,7 +301,7 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 	for {
 		var obj WhatType
 		err := dec.Decode(&obj)
-
+		fmt.Println("receiving", obj.WhatType()) //TODO
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Closed connection to", peer)
@@ -529,14 +529,13 @@ func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 			case <-ticker.C:
 				if len(seq[:]) > 0 {
 					sb := NewSignedBlock(n, seq)
-					fmt.Println("sequencer broadcasting:", sb)
+					fmt.Println("sequencer broadcasting:", sb) //TODO
 					broadcastBlock(*sb)
 					n++
 					endBlock = true
 				}
 			case t := <-sequencerCh:
 				seq = append(seq, t.ID)
-				fmt.Println("sequencer:", t.ID)
 			case <-quitCh:
 				return //Done
 			}
