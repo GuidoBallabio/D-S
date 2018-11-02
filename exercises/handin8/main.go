@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -36,7 +37,8 @@ var wg sync.WaitGroup
 func main() {
 
 	var (
-		keys = kingpin.Flag("keys", "Use predefined keys: first private then public").Short('k').Strings()
+		sk = kingpin.Flag("public-key", "Use predefined keys: private key file").Short('c').String()
+		pk = kingpin.Flag("secret-key", "Use predefined keys: public key file").Short('s').String()
 
 		server     = kingpin.Command("server", "Create your own network")
 		portServer = server.Flag("port", "Port of server.").Short('p').Default("4444").Int()
@@ -53,10 +55,13 @@ func main() {
 	var listenCh = make(chan SignedTransaction)
 	var blockCh = make(chan SignedBlock)
 
-	if *keys != nil {
+	if sk != nil && pk != nil {
+		skey, _ := ioutil.ReadFile(*sk)
+		pkey, _ := ioutil.ReadFile(*pk)
+
 		localKeys = &aesrsa.RSAKeyPair{
-			Public:  aesrsa.KeyFromString((*keys)[1]),
-			Private: aesrsa.KeyFromString((*keys)[0])}
+			Public:  aesrsa.KeyFromString(string(pkey)),
+			Private: aesrsa.KeyFromString(string(skey))}
 	} else {
 		createKeys()
 	}
@@ -374,8 +379,8 @@ func write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 			connect(localPeer)
 			break //Done
 		}
-		fmt.Println(t)
 		t = attachNextID(t)
+		fmt.Println(t)
 		key := aesrsa.KeyFromString(scanKey(scanner))
 		st := signTransaction(t, key)
 		listenCh <- st

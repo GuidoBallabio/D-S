@@ -1,0 +1,24 @@
+Initializing your own network
+Your IP is: 10.42.0.1 with open port: 4444
+You are the Sequencer
+Insert a transaction as: FromWhom ToWhom HowMuch each on different lines, then the private key to sign it 
+Transaction: ID 0-10.42.0.1:4444,
+From
+-----BEGIN KEY-----
+MIHHAoHBALVxRs2LdUNxmGvaynisqmt/+PGY0qDjObkUYID1/rjVQS/J5ST5OG+Yf6UOK6ue4uIo6rRZNS7k/dQw6n4bbI705Q3ZkFhNBQB7n+/kfFQZRzabKJZvZ/moRGLGatRpsNXVwFHzBzaD0nibyXKBEwcPE8Ihu4+bfhnaRc7bNk08w5W9M6Xv/gwgrWGBdczCZUDaBgWprCXBMRH5ABW+vdlhDeyFmv0W3cjE6pUc7TLttuBrc4RjdmM+IqQhxnXcdwIBAw==
+-----END KEY-----,
+To
+-----BEGIN KEY-----
+ACCOUNT_B
+-----END KEY-----,
+Amount 1
+Transaction: ID 0-10.42.0.1:4444,
+From
+-----BEGIN KEY-----
+MIHHAoHBALVxRs2LdUNxmGvaynisqmt/+PGY0qDjObkUYID1/rjVQS/J5ST5OG+Yf6UOK6ue4uIo6rRZNS7k/dQw6n4bbI705Q3ZkFhNBQB7n+/kfFQZRzabKJZvZ/moRGLGatRpsNXVwFHzBzaD0nibyXKBEwcPE8Ihu4+bfhnaRc7bNk08w5W9M6Xv/gwgrWGBdczCZUDaBgWprCXBMRH5ABW+vdlhDeyFmv0W3cjE6pUc7TLttuBrc4RjdmM+IqQhxnXcdwIBAw==
+-----END KEY-----,
+To
+-----BEGIN KEY-----
+ACCOUNT_B
+-----END KEY-----,
+Amount 1

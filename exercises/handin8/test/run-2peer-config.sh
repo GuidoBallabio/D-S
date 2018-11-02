@@ -68,19 +68,24 @@ cmdPeerf="test/transactionPeer.dat"
 resServf="test/logServer.txt"
 resPeerF="test/logPeer.txt"
 
+pkPeerF="test/pkPeer.key"
+skPeerF="test/skPeer.key"
+pkServF="test/pkServ.key"
+skServF="test/pkServ.key"
+
 if [[ ! -f "$cmdServf" ]] || [[ ! -f ""$cmdPeerf"" ]]; then
     touch $cmdServf
     touch $cmdPeerf
     
-    for i in {1..1000}
+    for i in {1..2}
     do
-      echo -e "$pkServ\n$pkACCOUNTB\n1\n$skSERV" >> "$cmdServf"
-      echo -e "$pkServ\n$pkACCOUNTC\n1\n$skSERV" >> ""$cmdPeerf""  
+      echo -e "$pkSERV\n$pkACCOUNTB\n1\n$skSERV" >> "$cmdServf"
+      echo -e "$pkSERV\n$pkACCOUNTC\n1\n$skSERV" >> "$cmdPeerf"
     done
 fi
 
-cat "$cmdServf"| ./main -k "$skSERV" -k "$pkSERV" server > "$resServf"
-cat "$cmdPeerf"| ./main -k "$skPEER" -k "$pkPEER" peer "$1" "4444" > "$resPeerf"
+cat "$cmdServf"| ./main -s "$skServF" -c "$pkServF" server > "$resServf" 
+cat "$cmdPeerf"| ./main -s "$skPeerF" -c "$pkPeerF" peer "$1" "4444" > "$resPeerf"
 
 
 
