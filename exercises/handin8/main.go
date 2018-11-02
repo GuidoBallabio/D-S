@@ -240,6 +240,7 @@ func beServer(listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock, qui
 		select {
 		case _, open := <-quitCh:
 			if !open {
+				ln.Close()
 				closeAllConn()
 				return //Done
 			}
@@ -307,11 +308,11 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 			peersList.Remove(peer)
 			break //Done
 		} else {
-			fmt.Println(obj)
 			switch obj.WhatType() {
 			case "SignedTransaction":
 				listenCh <- *obj.(*SignedTransaction)
 			case "Block":
+				fmt.Println(obj, "a block")
 				blockCh <- *obj.(*SignedBlock)
 			}
 		}
@@ -530,7 +531,6 @@ func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 					broadcastBlock(*sb)
 					n++
 					endBlock = true
-					fmt.Println(sb) //TODO
 				}
 			case t := <-sequencerCh:
 				seq = append(seq, t.ID)

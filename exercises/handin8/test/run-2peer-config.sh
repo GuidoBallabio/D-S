@@ -82,9 +82,14 @@ if [[ ! -f "$cmdServf" ]] || [[ ! -f "$cmdPeerf" ]]; then
       echo -e "$pkSERV\n$pkACCOUNTB\n1\n$skSERV" >> "$cmdServf"
       echo -e "$pkSERV\n$pkACCOUNTC\n1\n$skSERV" >> "$cmdPeerf"
     done
+    
+      echo -e "quit" >> "$cmdServf"
+      echo -e "quit" >> "$cmdPeerf"
+    
 fi
 
 cat "$cmdServf" | ./main -s "$skServF" -c "$pkServF" server > "$resServf" &
+sleep 1
 cat "$cmdPeerf" | ./main -s "$skPeerF" -c "$pkPeerF" peer "$1" "4444" > "$resPeerf"
 
 
