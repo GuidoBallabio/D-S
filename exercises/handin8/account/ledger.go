@@ -1,7 +1,6 @@
 package account
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -25,33 +24,34 @@ func (l *Ledger) Transaction(t Transaction) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
+	_, found := l.Accounts[t.From]
+
+	if !found {
+		l.Accounts[t.From] -= t.Amount
+	} else {
+		l.Accounts[t.From] -= t.Amount
+		l.Accounts[t.To] += t.Amount
+	}
+
 	l.clock++
-	l.Accounts[t.From] -= t.Amount
-	l.Accounts[t.To] += t.Amount
 }
 
-// TransactionWithBalanceCheck applies a transaction if not out of balance
-func (l *Ledger) TransactionWithBalanceCheck(t Transaction) error {
+// CheckBalance confirms a transacrtion won't put someone out of balance
+func (l *Ledger) CheckBalance(t Transaction) bool {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	val, found := l.Accounts[t.From]
 
 	if !found {
-		l.clock++
-		l.Accounts[t.From] = t.Amount
-		return nil
+		return true
 	}
 
 	if val < t.Amount {
-		return errors.New("Overdrwaing from balance not allowed")
+		return false
 	}
 
-	l.clock++
-	l.Accounts[t.From] -= t.Amount
-	l.Accounts[t.To] += t.Amount
-
-	return nil
+	return true
 }
 
 // GetClock return the ledger clock

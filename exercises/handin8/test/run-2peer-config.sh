@@ -71,11 +71,11 @@ resPeerF="test/logPeer.txt"
 pkPeerF="test/pkPeer.key"
 skPeerF="test/skPeer.key"
 pkServF="test/pkServ.key"
-skServF="test/pkServ.key"
+skServF="test/skServ.key"
 
-if [[ ! -f "$cmdServf" ]] || [[ ! -f ""$cmdPeerf"" ]]; then
-    touch $cmdServf
-    touch $cmdPeerf
+if [[ ! -f "$cmdServf" ]] || [[ ! -f "$cmdPeerf" ]]; then
+    touch "$cmdServf"
+    touch "$cmdPeerf"
     
     for i in {1..2}
     do
@@ -84,8 +84,8 @@ if [[ ! -f "$cmdServf" ]] || [[ ! -f ""$cmdPeerf"" ]]; then
     done
 fi
 
-cat "$cmdServf"| ./main -s "$skServF" -c "$pkServF" server > "$resServf" 
-cat "$cmdPeerf"| ./main -s "$skPeerF" -c "$pkPeerF" peer "$1" "4444" > "$resPeerf"
+cat "$cmdServf" | ./main -s "$skServF" -c "$pkServF" server > "$resServf" &
+cat "$cmdPeerf" | ./main -s "$skPeerF" -c "$pkPeerF" peer "$1" "4444" > "$resPeerf"
 
 
 

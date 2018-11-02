@@ -286,9 +286,10 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 }
 
 func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
-	fmt.Println("Connected to", peer)
 	defer wg.Done()
 	defer peer.GetConn().Close()
+
+	fmt.Println("Connected to", peer)
 
 	if peer.GetDec() == nil {
 		peer.AddDec(gob.NewDecoder(peer.GetConn()))
@@ -306,7 +307,7 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 			peersList.Remove(peer)
 			break //Done
 		} else {
-			fmt.Println(obj) //TODO
+			fmt.Println(obj)
 			switch obj.WhatType() {
 			case "SignedTransaction":
 				listenCh <- *obj.(*SignedTransaction)
@@ -323,7 +324,7 @@ func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 	for {
 		select {
 		case st := <-listenCh:
-			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) {
+			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) && ledger.CheckBalance(t) {
 				inTransit.AddTransaction(t)
 				past[st.ID] = true
 				broadcast(st)
@@ -353,7 +354,7 @@ func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
 }
 
 func attachNextID(t Transaction) Transaction {
-	t.ID = fmt.Sprintf("%d-%s", ledger.GetClock(), localPeer.GetAddress())
+	t.ID = fmt.Sprintf("%d-%s", len(past), localPeer.GetAddress())
 	return t
 }
 
@@ -380,10 +381,11 @@ func write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 			break //Done
 		}
 		t = attachNextID(t)
-		fmt.Println(t)
+		fmt.Println("Confirm with Secret Key")
 		key := aesrsa.KeyFromString(scanKey(scanner))
 		st := signTransaction(t, key)
 		listenCh <- st
+		fmt.Println("Sent")
 	}
 }
 
@@ -528,6 +530,7 @@ func beSequencer(sequencerCh <-chan Transaction, quitCh chan struct{}) {
 					broadcastBlock(*sb)
 					n++
 					endBlock = true
+					fmt.Println(sb) //TODO
 				}
 			case t := <-sequencerCh:
 				seq = append(seq, t.ID)

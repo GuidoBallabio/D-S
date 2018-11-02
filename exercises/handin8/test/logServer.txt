@@ -12,6 +12,8 @@ To
 ACCOUNT_B
 -----END KEY-----,
 Amount 1
+Confirm with Secret Key
+Sent
 Transaction: ID 0-10.42.0.1:4444,
 From
 -----BEGIN KEY-----
@@ -22,3 +24,6 @@ To
 ACCOUNT_B
 -----END KEY-----,
 Amount 1
+Confirm with Secret Key
+Sent
+Block: Number 0
