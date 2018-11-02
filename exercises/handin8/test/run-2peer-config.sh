@@ -66,7 +66,7 @@ cmdServf="test/transactionServer.dat"
 cmdPeerf="test/transactionPeer.dat"
 
 resServf="test/logServer.txt"
-resPeerF="test/logPeer.txt"
+resPeerf="test/logPeer.txt"
 
 pkPeerF="test/pkPeer.key"
 skPeerF="test/skPeer.key"
