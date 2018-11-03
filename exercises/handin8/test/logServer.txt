@@ -1,0 +1,9 @@
+Initializing your own network
+Your IP is: 10.42.0.1 with open port: 4444
+You are the Sequencer
+Insert a transaction as: FromWhom ToWhom HowMuch each on different lines, then the private key to sign it 
+Confirm with Secret Key
+Sent
+Confirm with Secret Key
+Sent
+sequencer broadcasting: Block: Number 0

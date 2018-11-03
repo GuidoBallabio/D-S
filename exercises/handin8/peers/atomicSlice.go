@@ -174,16 +174,17 @@ func (aslice *AtomicSortedSlice) GetPeerByConn(conn net.Conn) Peer {
 }
 
 // AddConn finds peer in slice and adds net.Conn to it
-func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) {
+func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) *Peer {
 	aslice.rwLock.RLock()
 	defer aslice.rwLock.RUnlock()
 
 	i, err := aslice.find(peer)
 	if err != nil {
-		return
+		return nil
 	}
 
 	aslice.data[i].AddConn(conn)
+	return &aslice.data[i]
 }
 
 // Remove a peer from the slice

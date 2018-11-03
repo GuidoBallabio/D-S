@@ -55,7 +55,7 @@ func main() {
 	var listenCh = make(chan SignedTransaction)
 	var blockCh = make(chan SignedBlock)
 
-	if sk != nil && pk != nil {
+	if *sk != "" && *pk != "" {
 		skey, _ := ioutil.ReadFile(*sk)
 		pkey, _ := ioutil.ReadFile(*pk)
 
@@ -189,13 +189,12 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh c
 			}
 			conn1, err := connect(p)
 			if err == nil {
-				peersList.AddConn(p, conn1)
-				p.AddConn(conn1)
+				p1 := peersList.AddConn(p, conn1)
 				enc = gob.NewEncoder(conn1)
-				p.AddEnc(enc)
+				p1.AddEnc(enc)
 				signalNoAsk(enc)
 				wg.Add(1)
-				go handleConn(p, listenCh, blockCh)
+				go handleConn(p1, listenCh, blockCh)
 			}
 			i++
 		}
@@ -261,7 +260,7 @@ func closeAllConn() {
 }
 
 // check if the peer asks for list of peers
-func checkAsk(conn net.Conn) (Peer, bool) {
+func checkAsk(conn net.Conn) (*Peer, bool) {
 	dec := gob.NewDecoder(conn)
 	p := &Peer{}
 	err := dec.Decode(p)
@@ -276,25 +275,21 @@ func checkAsk(conn net.Conn) (Peer, bool) {
 			}
 
 			enc.Encode(Peer{Port: -1})
-			return Peer{}, true
+			return &Peer{}, true
 		}
 		p.AddConn(conn)
 		p.AddDec(dec)
 		peersList.SortedInsert(*p)
-		return *p, false
+		return p, false
 	}
-	return Peer{}, true
+	return &Peer{}, true
 }
 
-func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
+func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
 	defer wg.Done()
-	defer peer.GetConn().Close()
+	defer peer.Close()
 
 	fmt.Println("Connected to", peer)
-
-	if peer.GetDec() == nil {
-		peer.AddDec(gob.NewDecoder(peer.GetConn()))
-	}
 
 	dec := peer.GetDec()
 
@@ -305,7 +300,7 @@ func handleConn(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- Sig
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Closed connection to", peer)
-			peersList.Remove(peer)
+			peersList.Remove(*peer)
 			break //Done
 		} else {
 			switch obj.WhatType() {

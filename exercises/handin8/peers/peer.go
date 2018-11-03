@@ -55,13 +55,26 @@ func (peer *Peer) GetPort() string {
 	return strconv.Itoa(peer.Port)
 }
 
-// GetConn return the connection to the peer if available
-func (peer *Peer) GetConn() net.Conn {
-	return peer.conn
+// Close closees the connection of the peer
+func (peer *Peer) Close() {
+	peer.conn.Close()
+}
+
+// GetEnc return the encoder to the peer if available
+func (peer *Peer) GetEnc() *gob.Encoder {
+	if peer.enc == nil {
+		peer.enc = gob.NewEncoder(peer.conn)
+	}
+
+	return peer.enc
 }
 
 // GetDec return the decoder to the peer if available
 func (peer *Peer) GetDec() *gob.Decoder {
+	if peer.dec == nil {
+		peer.dec = gob.NewDecoder(peer.conn)
+	}
+
 	return peer.dec
 }
 
