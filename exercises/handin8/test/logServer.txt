@@ -6,4 +6,7 @@ Confirm with Secret Key
 Sent
 Confirm with Secret Key
 Sent
+Connected to Peer: 10.42.0.1:4445
 sequencer broadcasting: Block: Number 0
+EOF
+Closed connection to Peer: 10.42.0.1:4445

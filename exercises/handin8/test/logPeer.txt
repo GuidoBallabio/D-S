@@ -1,0 +1,6 @@
+Connection to the network Succesfull
+Your IP is: 10.42.0.1 with open port: 4445
+Insert a transaction as: FromWhom ToWhom HowMuch each on different lines, then the private key to sign it 
+Confirm with Secret Key
+Connected to Peer: 10.42.0.1:4444
+Sent

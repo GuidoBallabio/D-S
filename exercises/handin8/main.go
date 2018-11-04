@@ -71,7 +71,6 @@ func main() {
 
 	switch cmd {
 	case "server":
-		wg.Add(1)
 		createNetwork(*portServer, listenCh, blockCh)
 
 	case "peer":
@@ -88,8 +87,10 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 	var sequencerCh = make(chan Transaction)
 	var quitCh = make(chan struct{})
 
-	wg.Add(4)
+	wg.Add(1)
 	go beServer(listenCh, blockCh, quitCh)
+
+	wg.Add(3)
 	go processTransactions(listenCh, sequencerCh, quitCh)
 	go processBlocks(blockCh, quitCh)
 	go write(listenCh, quitCh)
@@ -294,7 +295,7 @@ func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- Si
 	dec := peer.GetDec()
 
 	for {
-		var obj WhatType
+		var obj SignedTransaction
 		err := dec.Decode(&obj)
 		fmt.Println("receiving", obj.WhatType()) //TODO
 		if err != nil {
@@ -305,10 +306,10 @@ func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- Si
 		} else {
 			switch obj.WhatType() {
 			case "SignedTransaction":
-				listenCh <- *obj.(*SignedTransaction)
+				listenCh <- obj // *obj.(*SignedTransaction)
 			case "Block":
 				fmt.Println(obj, "a block") //TODO
-				blockCh <- *obj.(*SignedBlock)
+				//blockCh <- *obj.(*SignedBlock)
 			}
 		}
 	}
