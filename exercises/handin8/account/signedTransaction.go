@@ -17,15 +17,6 @@ type SignedTransaction struct {
 	Signature string
 }
 
-// NewSignedTransaction is a constructor of transactions
-func NewSignedTransaction(ID, From, To string, Amount int) *SignedTransaction {
-	return &SignedTransaction{
-		ID:     ID,
-		From:   From,
-		To:     To,
-		Amount: Amount}
-}
-
 // ExtractTransaction extracts the transaction from the signed one
 func (st SignedTransaction) ExtractTransaction() Transaction {
 	return Transaction{

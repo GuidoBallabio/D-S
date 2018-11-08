@@ -26,20 +26,21 @@ func (l *Ledger) Transaction(t Transaction) {
 
 	_, found := l.Accounts[t.From]
 
-	if !found {
-		l.Accounts[t.From] -= t.Amount
-	} else {
-		l.Accounts[t.From] -= t.Amount
-		l.Accounts[t.To] += t.Amount
-	}
+	if l.checkBalance(t) {
+		if !found {
+			l.Accounts[t.From] += t.Amount
+		} else {
+			l.Accounts[t.From] -= t.Amount
+			l.Accounts[t.To] += t.Amount
+		}
 
-	l.clock++
+		l.clock++
+	}
 }
 
-// CheckBalance confirms a transacrtion won't put someone out of balance
-func (l *Ledger) CheckBalance(t Transaction) bool {
-	l.lock.Lock()
-	defer l.lock.Unlock()
+// checkBalance confirms a transacrtion won't put someone out of balance
+// without locks as private for use inside other locked func
+func (l *Ledger) checkBalance(t Transaction) bool {
 
 	val, found := l.Accounts[t.From]
 
@@ -52,6 +53,14 @@ func (l *Ledger) CheckBalance(t Transaction) bool {
 	}
 
 	return true
+}
+
+// CheckBalance confirms a transacrtion won't put someone out of balance
+func (l *Ledger) CheckBalance(t Transaction) bool {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.checkBalance(t)
 }
 
 // GetClock return the ledger clock

@@ -10,14 +10,14 @@ import (
 
 // AtomicSortedSlice is a synchronized []Peer type
 type AtomicSortedSlice struct {
-	data   []Peer
+	data   []*Peer
 	rwLock sync.RWMutex
 }
 
 // NewList is the constructor of the AtomicSortedSlice type, it just creates an empty synchronized slice
 func NewList() *AtomicSortedSlice {
 	var aslice AtomicSortedSlice
-	aslice.data = make([]Peer, 0)
+	aslice.data = make([]*Peer, 0)
 	return &aslice
 }
 
@@ -25,12 +25,12 @@ func NewList() *AtomicSortedSlice {
 func (aslice *AtomicSortedSlice) AddPeerFromConn(conn net.Conn) Peer {
 	addr := conn.RemoteAddr().(*net.TCPAddr)
 	p := newPeer(addr.IP.String(), addr.Port, conn)
-	aslice.SortedInsert(p)
+	aslice.SortedInsert(&p)
 	return p
 }
 
 // find search the slice for an element and return its index
-func (aslice *AtomicSortedSlice) find(peer Peer) (int, error) {
+func (aslice *AtomicSortedSlice) find(peer *Peer) (int, error) {
 	i := sort.Search(len(aslice.data), func(i int) bool { return peer.less(aslice.data[i]) }) - 1
 	if i >= 0 && i < len(aslice.data) && aslice.data[i] == peer {
 		return i, nil
@@ -39,13 +39,13 @@ func (aslice *AtomicSortedSlice) find(peer Peer) (int, error) {
 }
 
 // SortedInsert is the synchronized sorted append that returns the index where it was added
-func (aslice *AtomicSortedSlice) SortedInsert(peer Peer) int {
+func (aslice *AtomicSortedSlice) SortedInsert(peer *Peer) int {
 	aslice.rwLock.Lock()
 	defer aslice.rwLock.Unlock()
 
 	l := len(aslice.data)
 	if l == 0 {
-		aslice.data = []Peer{peer}
+		aslice.data = []*Peer{peer}
 		return 0
 	}
 
@@ -56,7 +56,7 @@ func (aslice *AtomicSortedSlice) SortedInsert(peer Peer) int {
 	}
 
 	if i == 0 { // not found = new value is the smallest
-		aslice.data = append([]Peer{peer}, aslice.data...)
+		aslice.data = append([]*Peer{peer}, aslice.data...)
 		return 0
 	}
 
@@ -65,7 +65,7 @@ func (aslice *AtomicSortedSlice) SortedInsert(peer Peer) int {
 		return i
 	}
 
-	aslice.data = append(aslice.data, Peer{})
+	aslice.data = append(aslice.data, &Peer{})
 	copy(aslice.data[i+1:], aslice.data[i:])
 	aslice.data[i] = peer
 	return i
@@ -74,8 +74,8 @@ func (aslice *AtomicSortedSlice) SortedInsert(peer Peer) int {
 // Iter iterates over the items in the concurrent slice
 // Each item is sent over a channel, so that
 // we can iterate over the slice using the builin range keyword
-func (aslice *AtomicSortedSlice) Iter() <-chan Peer {
-	c := make(chan Peer)
+func (aslice *AtomicSortedSlice) Iter() <-chan *Peer {
+	c := make(chan *Peer)
 
 	f := func() {
 		aslice.rwLock.RLock()
@@ -91,16 +91,15 @@ func (aslice *AtomicSortedSlice) Iter() <-chan Peer {
 }
 
 // IterWrap accept a peer or an index and iterates from that item to itself wrapping around
-func (aslice *AtomicSortedSlice) IterWrap(peer Peer) <-chan Peer {
+func (aslice *AtomicSortedSlice) IterWrap(peer *Peer) <-chan *Peer {
 
-	c := make(chan Peer)
+	c := make(chan *Peer)
 
 	f := func() {
 		aslice.rwLock.RLock()
 		defer aslice.rwLock.RUnlock()
 
 		i, err := aslice.find(peer)
-
 		if err != nil {
 			close(c)
 			return
@@ -161,7 +160,7 @@ func (aslice *AtomicSortedSlice) IterEnc() <-chan *gob.Encoder {
 }
 
 // GetPeerByConn returns a peer given a net.Conn
-func (aslice *AtomicSortedSlice) GetPeerByConn(conn net.Conn) Peer {
+func (aslice *AtomicSortedSlice) GetPeerByConn(conn net.Conn) *Peer {
 	aslice.rwLock.RLock()
 	defer aslice.rwLock.RUnlock()
 
@@ -170,11 +169,11 @@ func (aslice *AtomicSortedSlice) GetPeerByConn(conn net.Conn) Peer {
 			return value
 		}
 	}
-	return Peer{}
+	return &Peer{}
 }
 
 // AddConn finds peer in slice and adds net.Conn to it
-func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) *Peer {
+func (aslice *AtomicSortedSlice) AddConn(peer *Peer, conn net.Conn) *Peer {
 	aslice.rwLock.RLock()
 	defer aslice.rwLock.RUnlock()
 
@@ -184,11 +183,11 @@ func (aslice *AtomicSortedSlice) AddConn(peer Peer, conn net.Conn) *Peer {
 	}
 
 	aslice.data[i].AddConn(conn)
-	return &aslice.data[i]
+	return aslice.data[i]
 }
 
 // Remove a peer from the slice
-func (aslice *AtomicSortedSlice) Remove(peer Peer) {
+func (aslice *AtomicSortedSlice) Remove(peer *Peer) {
 	aslice.rwLock.Lock()
 	defer aslice.rwLock.Unlock()
 
@@ -196,4 +195,12 @@ func (aslice *AtomicSortedSlice) Remove(peer Peer) {
 	if err == nil {
 		aslice.data = append(aslice.data[:i], aslice.data[i+1:]...)
 	}
+}
+
+// Length returns the number of peers
+func (aslice *AtomicSortedSlice) Length() int {
+	aslice.rwLock.RLock()
+	defer aslice.rwLock.RUnlock()
+
+	return len(aslice.data)
 }

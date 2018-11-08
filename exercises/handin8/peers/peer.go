@@ -79,7 +79,7 @@ func (peer *Peer) GetDec() *gob.Decoder {
 }
 
 // Less defines an order relationshIP for peers
-func (peer *Peer) less(peer2 Peer) bool {
+func (peer *Peer) less(peer2 *Peer) bool {
 	switch {
 	case peer.IP < peer2.IP:
 		return true

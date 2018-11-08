@@ -8,16 +8,16 @@ import (
 	"../aesrsa"
 )
 
+// SignedBlock is an atomic operation on a ledger
 type SignedBlock struct {
 	Number    int
 	TransList []string
 	Signature string
 }
 
-func NewSignedBlock(Number int, TransList []string) *SignedBlock {
-	return &SignedBlock{
-		Number:    Number,
-		TransList: TransList}
+func NewSignedBlock(Number int, TransList []string, privKey aesrsa.RSAKey) *SignedBlock {
+	b := NewBlock(Number, TransList)
+	return SignBlock(*b, privKey)
 }
 
 func (sb SignedBlock) ExtractBlock() Block {
@@ -26,13 +26,13 @@ func (sb SignedBlock) ExtractBlock() Block {
 		TransList: sb.TransList}
 }
 
-func SignBlock(b Block, privKey aesrsa.RSAKey) SignedBlock {
+func SignBlock(b Block, privKey aesrsa.RSAKey) *SignedBlock {
 	jsonT, err := json.Marshal(b)
 	check(err)
 
 	sign := base64.StdEncoding.EncodeToString(aesrsa.SignRSA(jsonT, privKey))
 
-	return SignedBlock{
+	return &SignedBlock{
 		Number:    b.Number,
 		TransList: b.TransList,
 		Signature: sign}

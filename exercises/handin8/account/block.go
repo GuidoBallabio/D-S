@@ -12,8 +12,3 @@ func NewBlock(Number int, TransList []string) *Block {
 		Number:    Number,
 		TransList: TransList}
 }
-
-// WhatType returns "Block" for Block type
-func (b Block) WhatType() string {
-	return "Block"
-}
