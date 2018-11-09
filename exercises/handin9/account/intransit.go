@@ -20,8 +20,8 @@ func NewTransactionMap() *TransactionMap {
 
 // GetTransaction is method of that retireves the transaction given the ID
 func (l *TransactionMap) GetTransaction(id string) Transaction {
-	l.lock.Lock()
-	defer l.lock.Unlock()
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 
 	return l.data[id]
 }

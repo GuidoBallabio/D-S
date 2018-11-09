@@ -25,7 +25,7 @@ var localKeys *aesrsa.RSAKeyPair
 
 var peersList = NewList()
 var ledger = NewLedger()
-var past = map[string]bool{}
+var past = NewPastMap()
 
 var sequencer aesrsa.RSAKey
 var sequencerSecret aesrsa.RSAKey
@@ -421,13 +421,13 @@ func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 	for {
 		select {
 		case st := <-listenCh:
-			if t := st.ExtractTransaction(); !isOld(st) && isVerified(st) && ledger.CheckBalance(t) {
+			if t := st.ExtractTransaction(); !isOld(t) && isVerified(st) && ledger.CheckBalance(t) {
 				inTransit.AddTransaction(t)
-				past[st.ID] = true
-				broadcast(st)
+				past.AddPast(t, true)
 				if checkIfSequencer() {
 					sequencerCh <- t
 				}
+				broadcast(st)
 			}
 		case <-quitCh:
 			return //Done
@@ -435,8 +435,8 @@ func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 	}
 }
 
-func isOld(st SignedTransaction) bool {
-	if val, found := past[st.ID]; found && val {
+func isOld(t Transaction) bool {
+	if val, found := past.GetPast(t); found && val {
 		return true
 	}
 	return false
@@ -451,8 +451,8 @@ func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
 }
 
 func attachNextID(t Transaction) Transaction {
-	t.ID = fmt.Sprintf("%d-%s", len(past), localPeer.GetAddress())
-	past[t.ID] = false
+	t.ID = fmt.Sprintf("%d-%s", past.GetPastLength(), localPeer.GetAddress())
+	past.AddPast(t, false)
 	return t
 }
 

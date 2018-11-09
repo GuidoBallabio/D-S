@@ -76,16 +76,18 @@ skServF="test/skServ.key"
 if [[ ! -f "$cmdServf" ]] || [[ ! -f "$cmdPeerf" ]]; then
     touch "$cmdServf"
     touch "$cmdPeerf"
-    
-    for i in {1..2}
+
+    echo -e "$pkSERV\n$pkACCOUNTB\n1000\n$skSERV" >> "$cmdServf"
+
+    for i in {1..1000}
     do
       echo -e "$pkSERV\n$pkACCOUNTB\n1\n$skSERV" >> "$cmdServf"
       echo -e "$pkSERV\n$pkACCOUNTC\n1\n$skSERV" >> "$cmdPeerf"
     done
-    
-      echo -e "quit" >> "$cmdServf"
-      echo -e "quit" >> "$cmdPeerf"
-    
+
+#      echo -e "quit" >> "$cmdServf"
+#      echo -e "quit" >> "$cmdPeerf"
+
 fi
 
 cat "$cmdServf" | ./main -s "$skServF" -c "$pkServF" server > "$resServf" &
