@@ -1,23 +1,23 @@
 package main
 
 import (
-	"bufio"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
+	heap "github.com/emirpasic/gods/trees/binaryheap"
+	"github.com/emirpasic/gods/utils"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	. "./account"
 	"./aesrsa"
 	. "./peers"
+	"./services"
 )
 
 var localPeer Peer
@@ -31,7 +31,6 @@ var sequencer aesrsa.RSAKey
 var sequencerSecret aesrsa.RSAKey
 
 var inTransit = NewTransactionMap()
-var lastBlock = -1
 
 var wg sync.WaitGroup
 
@@ -98,7 +97,7 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 	wg.Add(3)
 	go processTransactions(listenCh, sequencerCh, quitCh)
 	go processBlocks(blockCh, quitCh)
-	go write(listenCh, quitCh)
+	go services.Write(listenCh, attachNextID, quitCh, &wg)
 
 	if checkIfSequencer() {
 		wg.Add(1)
@@ -106,6 +105,7 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 	}
 
 	<-quitCh
+	connect(&localPeer)
 	wg.Wait()
 }
 
@@ -318,103 +318,6 @@ func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- Si
 	}
 }
 
-func write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
-	defer wg.Done()
-
-	fmt.Println("Insert a transaction as: FromWho ToWho HowMuch each on different lines, then the private key to sign it ")
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Split(bufio.ScanLines)
-
-	for {
-		t, quit := askTransaction(scanner)
-		if quit {
-			fmt.Println("quitting...")
-			close(quitCh)
-			connect(&localPeer)
-			break //Done
-		}
-		t = attachNextID(t)
-		fmt.Println("Confirm with Secret Key")
-		key := aesrsa.KeyFromString(scanKey(scanner))
-		st := signTransaction(t, key)
-		listenCh <- st
-		fmt.Println("Sent")
-	}
-}
-
-func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
-
-	from := scanKey(scanner)
-
-	if from == "quit" {
-		return Transaction{}, true
-	}
-
-	to := scanKey(scanner)
-
-	if to == "quit" {
-		return Transaction{}, true
-	}
-
-	scanner.Scan()
-	amount := scanner.Text()
-
-	if amount == "quit" {
-		return Transaction{}, true
-	}
-
-	intAmount, err := strconv.Atoi(amount)
-
-	for err != nil {
-		fmt.Println("not valid integer amount")
-		scanner.Scan()
-		amount := scanner.Text()
-
-		if amount == "quit" {
-			return Transaction{}, true
-		}
-
-		intAmount, err = strconv.Atoi(amount)
-	}
-
-	return Transaction{
-		From:   from,
-		To:     to,
-		Amount: intAmount}, false
-}
-
-func scanKey(scanner *bufio.Scanner) string {
-	scanner.Scan()
-	buf := scanner.Text()
-
-	for buf != "-----BEGIN KEY-----" {
-		if buf == "quit" {
-			return buf
-		}
-		scanner.Scan()
-		buf = scanner.Text()
-	}
-
-	key := buf + "\n"
-
-	scanner.Scan()
-	buf = scanner.Text()
-
-	for buf != "-----END KEY-----" {
-		if buf == "quit" {
-			return buf
-		}
-		key += buf
-
-		scanner.Scan()
-		buf = scanner.Text()
-	}
-
-	key += "\n" + buf
-
-	return key
-}
-
 func processTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- Transaction, quitCh <-chan struct{}) {
 	defer wg.Done()
 
@@ -446,10 +349,6 @@ func isVerified(st SignedTransaction) bool {
 	return st.VerifyTransaction() && st.Amount > 0
 }
 
-func signTransaction(t Transaction, k aesrsa.RSAKey) SignedTransaction {
-	return SignTransaction(t, k)
-}
-
 func attachNextID(t Transaction) Transaction {
 	t.ID = fmt.Sprintf("%d-%s", past.GetPastLength(), localPeer.GetAddress())
 	past.AddPast(t, false)
@@ -467,16 +366,25 @@ func broadcast(st SignedTransaction) {
 func processBlocks(blockCh <-chan SignedBlock, quitCh <-chan struct{}) {
 	defer wg.Done()
 
+	comp := func(a, b interface{}) int {
+		b1 := a.(Block)
+		b2 := b.(Block)
+		return utils.IntComparator(b1.Number, b2.Number)
+	}
+
+	pq := heap.NewWith(comp)
+	defer pq.Clear()
+
+	lastBlock := -1
+
 	for {
 		select {
 		case sb := <-blockCh:
-			if b := sb.ExtractBlock(); sb.VerifyBlock(sequencer) && isFuture(b) {
-				if isNext(b) {
-					updateLedger(b)
-					lastBlock++
-					fmt.Println(ledger) //TODO better print
-				}
+			if b := sb.ExtractBlock(); sb.VerifyBlock(sequencer) && isFuture(b, lastBlock) {
+				pq.Push(b)
 				broadcastBlock(sb)
+				lastBlock = applyAllValidBlocks(pq, lastBlock)
+				fmt.Println(ledger) //TODO better print
 			}
 		case <-quitCh:
 			return //Done
@@ -486,12 +394,13 @@ func processBlocks(blockCh <-chan SignedBlock, quitCh <-chan struct{}) {
 }
 
 // isFuture tells if it's already been processed
-func isFuture(b Block) bool {
+func isFuture(b Block, lastBlock int) bool {
+	fmt.Println(b.Number, lastBlock)
 	return b.Number >= lastBlock+1
 }
 
 // isNext tells if it's the next block to be processed
-func isNext(b Block) bool {
+func isNext(b Block, lastBlock int) bool {
 	return b.Number == lastBlock+1
 }
 
@@ -500,6 +409,27 @@ func updateLedger(b Block) {
 	for _, id := range b.TransList {
 		ledger.Transaction(inTransit.GetTransaction(id))
 	}
+}
+
+func applyAllValidBlocks(pq *heap.Heap, lastBlock int) int {
+	if !pq.Empty() {
+		tmp, full := pq.Peek()
+		min := tmp.(Block)
+		for full && isNext(min, lastBlock) {
+			tmp, _ := pq.Pop()
+			min = tmp.(Block)
+
+			updateLedger(min)
+			lastBlock++
+
+			tmp, full = pq.Peek()
+			if full {
+				min = tmp.(Block)
+			}
+		}
+	}
+
+	return lastBlock
 }
 
 // broadcast a signed block
