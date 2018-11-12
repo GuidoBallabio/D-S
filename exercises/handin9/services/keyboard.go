@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 
 	. "../account"
 	"../aesrsa"
 )
 
 // Write handles the input from keyboard
-func Write(listenCh chan<- SignedTransaction, newID func(Transaction) Transaction, quitCh chan<- struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
+func Write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
+	defer Wg.Done()
 
 	fmt.Println("Insert a transaction as: FromWho ToWho HowMuch each on different lines, then the private key to sign it ")
 	scanner := bufio.NewScanner(os.Stdin)
@@ -26,7 +25,7 @@ func Write(listenCh chan<- SignedTransaction, newID func(Transaction) Transactio
 			close(quitCh)
 			break //Done
 		}
-		t = newID(t)
+		t = attachNextID(t)
 		fmt.Println("Confirm with Secret Key")
 		key := aesrsa.KeyFromString(scanKey(scanner))
 		st := SignTransaction(t, key)
