@@ -17,19 +17,62 @@ type Node struct {
 	Draw         []byte
 	CreatedStake []Transaction
 	TransList    []string
-	HashParent   [32]byte
+	Parent       nodeHash
+}
+
+type nodeHash [32]byte
+
+// GetNode gets a node given its hash
+func (nh nodeHash) getNode() *Node {
+	val, found := nodeSet[nh]
+	return val
 }
 
 // NewNode given slot number and transactions
 func NewNode(slot uint64, transList []string, keys aesrsa.RSAKeyPair, parent *Node) *Node {
+	seed := nodeSet[genesis].Seed
 	return &Node{
-		Seed:       genesis.Seed,
-		Slot:       slot,
-		Peer:       aesrsa.KeyToString(keys.Public),
-		Draw:       getDraw(slot, genesis.Seed, keys.Private),
-		TransList:  transList,
-		HashParent: hashNode(parent)}
+		Seed:      seed,
+		Slot:      slot,
+		Peer:      aesrsa.KeyToString(keys.Public),
+		Draw:      getDraw(slot, seed, keys.Private),
+		TransList: transList,
+		Parent:    parent.hash()}
 }
+
+// GetParent returns the parent of the node
+func (n *Node) GetParent() *Node {
+	val, found := nodeSet[n.Parent]
+	return val
+}
+
+func (n *Node) valueOfDraw() *big.Int {
+	var val big.Int
+
+	json1, err := json.Marshal(n.Slot)
+	check(err)
+	json2, err := json.Marshal(n.Seed)
+	check(err)
+	json3, err := json.Marshal(n.Draw)
+	check(err)
+	json4, err := json.Marshal(n.Peer)
+	check(err)
+	json := append(json1, json2...)
+	json = append(json, json3...)
+	json = append(json, json4...)
+
+	hash := sha256.Sum256(json)
+
+	hashInt := new(big.Int).SetBytes(hash[:])
+
+	return val.Mul(hashInt, big.NewInt(getStake(n.Peer)))
+}
+
+func (n *Node) hash() nodeHash {
+	return hashNode(n)
+}
+
+// utils
 
 func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	json1, err := json.Marshal(slot)
@@ -40,37 +83,11 @@ func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	return aesrsa.SignRSA(append(json1, json2...), sk)
 }
 
-func hashNode(node *Node) [32]byte {
-	json, err := json.Marshal(node)
+func hashNode(n *Node) nodeHash {
+	json, err := json.Marshal(n)
 	check(err)
 
 	return sha256.Sum256(json)
-}
-
-func valueOfDraw(node *Node) *big.Int {
-	var val big.Int
-
-	json1, err := json.Marshal(node.Slot)
-	check(err)
-	json2, err := json.Marshal(node.Seed)
-	check(err)
-	json3, err := json.Marshal(node.Peer)
-	check(err)
-	json4, err := json.Marshal(node.Peer)
-	check(err)
-	json := append(json1, json2...)
-	json = append(json, json3...)
-	json = append(json, json4...)
-
-	hash := sha256.Sum256(json)
-
-	hashInt := new(big.Int).SetBytes(hash[:])
-
-	return val.Mul(hashInt, big.NewInt(getStake(node.Peer)))
-}
-
-func getStake(peer string) int64 {
-	return int64(ledger.GetBalance(peer))
 }
 
 func check(e error) {
