@@ -7,15 +7,14 @@ import (
 
 // Ledger is synchronized account map
 type Ledger struct {
-	Accounts map[string]int
-	clock    uint64
+	Accounts map[string]uint64
 	lock     sync.RWMutex
 }
 
 // NewLedger is a constructor of ledgers
 func NewLedger() *Ledger {
 	var l Ledger
-	l.Accounts = make(map[string]int, 1)
+	l.Accounts = make(map[string]uint64, 1)
 	return &l
 }
 
@@ -34,7 +33,6 @@ func (l *Ledger) Transaction(t Transaction) {
 			l.Accounts[t.To] += t.Amount
 		}
 
-		l.clock++
 	}
 }
 
@@ -63,12 +61,21 @@ func (l *Ledger) CheckBalance(t Transaction) bool {
 	return l.checkBalance(t)
 }
 
-// GetClock return the ledger clock
-func (l *Ledger) GetClock() uint64 {
+// GetBalance returns the balance of a peer
+func (l *Ledger) GetBalance(peer string) uint64 {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	return l.clock
+	return l.Accounts[peer]
+}
+
+// AddToBalance creates money giving it to a peer
+func (l *Ledger) AddToBalance(peer string, amount uint64) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	l.Accounts[peer] += amount
+
 }
 
 func (l *Ledger) String() string {

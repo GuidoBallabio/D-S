@@ -9,12 +9,12 @@ type Transaction struct {
 	ID     string
 	From   string
 	To     string
-	Amount int
+	Amount uint64
 }
 
 // NewTransaction is a constructor of transactions
-func NewTransaction(ID, From, To string, Amount int) *Transaction {
-	return &Transaction{
+func NewTransaction(ID, From, To string, Amount uint64) Transaction {
+	return Transaction{
 		ID:     ID,
 		From:   From,
 		To:     To,

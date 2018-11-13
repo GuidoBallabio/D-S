@@ -13,7 +13,7 @@ type SignedTransaction struct {
 	ID        string
 	From      string
 	To        string
-	Amount    int
+	Amount    uint64
 	Signature string
 }
 

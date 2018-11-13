@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 )
@@ -95,6 +96,25 @@ func DecryptFromFile(fin, pw string) []byte {
 
 	return decryptAES(ct, pwBytes)
 
+}
+
+// StoreKeyPair writes a RSAKeyPair to a file (encrypted)
+func StoreKeyPair(keys *RSAKeyPair, file, pw string) {
+	pt, err := json.Marshal(keys)
+	check(err)
+
+	EncryptToFile(pt, file, pw)
+}
+
+// ReadKeyPair retrieves a RSAKeyPair from a file (decrypting it)
+func ReadKeyPair(file, pw string) *RSAKeyPair {
+	out := DecryptFromFile(file, pw)
+
+	res := &RSAKeyPair{}
+	err := json.Unmarshal(out, &res)
+	check(err)
+
+	return res
 }
 
 // This two function below have been copied from https://github.com/go-web/tokenizer/blob/master/pkcs7.go

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -10,6 +9,7 @@ import (
 
 	. "./account"
 	"./aesrsa"
+	bt "./blocktree"
 	. "./peers"
 	serv "./services"
 )
@@ -19,11 +19,12 @@ var localKeys *aesrsa.RSAKeyPair
 func main() {
 
 	var (
-		sk = kingpin.Flag("public-key", "Use predefined keys: private key file").Short('c').String()
-		pk = kingpin.Flag("secret-key", "Use predefined keys: public key file").Short('s').String()
+		keys = kingpin.Flag("keys", "Use predefined keys").Short('k').String()
+		pw   = kingpin.Flag("password", "Password for the keys").Short('x').String()
 
 		server     = kingpin.Command("server", "Create your own network")
 		portServer = server.Flag("port", "Port of server.").Short('p').Default("4444").Int()
+		dir        = server.Flag("dir", "Directory for the founders' keys").Short('d').Default("founders").String()
 
 		peer = kingpin.Command("peer", "Connect to a peer in a pre-existing network.")
 		ip   = peer.Arg("ip", "IP address of Peer.").Required().IP()
@@ -33,21 +34,6 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 
 	cmd := kingpin.Parse()
-
-	if *sk != "" && *pk != "" {
-		skey, _ := ioutil.ReadFile(*sk)
-		pkey, _ := ioutil.ReadFile(*pk)
-
-		localKeys = &aesrsa.RSAKeyPair{
-			Public:  aesrsa.KeyFromString(string(pkey)),
-			Private: aesrsa.KeyFromString(string(skey))}
-	} else {
-		var err error
-		localKeys, err = aesrsa.KeyGen(2048)
-		if err != nil {
-			panic(err.Error())
-		}
-	}
 
 	fmt.Println("Your secret key is:")
 	fmt.Println(aesrsa.KeyToString(localKeys.Private))
@@ -61,13 +47,22 @@ func main() {
 	switch cmd {
 	case "server":
 		serv.CreateNetwork(*portServer, listenCh, blockCh, localKeys.Public)
-		serv.BecomeSequencer()
-
+		InitBlockChain(10, *dir)
 	case "peer":
 		firstPeer := Peer{
 			IP:   ip.String(),
 			Port: *port}
 		serv.ConnectToNetwork(firstPeer, listenCh, blockCh, localKeys.Public)
+	}
+
+	if *keys != "" && *pw != "" {
+		localKeys = aesrsa.ReadKeyPair(*keys, *pw)
+	} else {
+		var err error
+		localKeys, err = aesrsa.KeyGen(2048)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	startServices(listenCh, blockCh)
@@ -97,4 +92,45 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 	<-quitCh
 	serv.Connect(&serv.LocalPeer)
 	serv.Wg.Wait()
+}
+
+/////////// Init Functions ///////////
+
+// InitBlockChain make the necessary preparetions for the blockchain
+func InitBlockChain(n int, dir string) {
+	founders := GenerateFounders(n, dir)
+	tl := InitTransactions(founders)
+	bt.NewTree(tl)
+}
+
+// GenerateFounders creates n founders' keys and returns the list of founders' public keys
+func GenerateFounders(n int, dir string) []string {
+	var founders = []string{}
+
+	for i := 0; i < n; i++ {
+		keys, err := aesrsa.KeyGen(2048)
+		if err != nil {
+			panic(err)
+		}
+
+		file := fmt.Sprintf("Keys - %d", i)
+		pw := fmt.Sprintf("Password - %d", i)
+		aesrsa.StoreKeyPair(keys, file, pw)
+
+		founders = append(founders, aesrsa.KeyToString(keys.Public))
+	}
+
+	return founders
+}
+
+// InitTransactions returns the list of genesis' transactions given a list of peers (pubKeys)
+func InitTransactions(founders []string) []Transaction {
+	var list = []Transaction{}
+
+	for i, f := range founders {
+		id := fmt.Sprintf("Genesis - %d", i)
+		list = append(list, NewTransaction(id, "Genesis", f, 1e6))
+	}
+
+	return list
 }

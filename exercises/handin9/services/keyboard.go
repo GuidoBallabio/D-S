@@ -55,7 +55,8 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 		return Transaction{}, true
 	}
 
-	intAmount, err := strconv.Atoi(amount)
+	tmp, err := strconv.Atoi(amount)
+	intAmount := uint64(tmp)
 
 	for err != nil {
 		fmt.Println("not valid integer amount")
@@ -66,7 +67,8 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 			return Transaction{}, true
 		}
 
-		intAmount, err = strconv.Atoi(amount)
+		tmp, err = strconv.Atoi(amount)
+		intAmount = uint64(tmp)	
 	}
 
 	return Transaction{
