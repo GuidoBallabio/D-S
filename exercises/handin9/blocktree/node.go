@@ -16,21 +16,12 @@ type Node struct {
 	Peer         string
 	Draw         []byte
 	CreatedStake []Transaction
-	TransList    []string
+	TransList    []Transaction
 	Parent       nodeHash
 }
 
-type nodeHash [32]byte
-
-// GetNode gets a node given its hash
-func (nh nodeHash) getNode() *Node {
-	val, found := nodeSet[nh]
-	return val
-}
-
 // NewNode given slot number and transactions
-func NewNode(slot uint64, transList []string, keys aesrsa.RSAKeyPair, parent *Node) *Node {
-	seed := nodeSet[genesis].Seed
+func NewNode(seed, slot uint64, transList []Transaction, keys aesrsa.RSAKeyPair, parent *Node) *Node {
 	return &Node{
 		Seed:      seed,
 		Slot:      slot,
@@ -41,12 +32,12 @@ func NewNode(slot uint64, transList []string, keys aesrsa.RSAKeyPair, parent *No
 }
 
 // GetParent returns the parent of the node
-func (n *Node) GetParent() *Node {
-	val, found := nodeSet[n.Parent]
+func (n *Node) getParent(t *Tree) *Node { //maybe needs locks
+	val, _ := t.nodeSet[n.Parent]
 	return val
 }
 
-func (n *Node) valueOfDraw() *big.Int {
+func (n *Node) valueOfDraw(t *Tree) *big.Int {
 	var val big.Int
 
 	json1, err := json.Marshal(n.Slot)
@@ -65,7 +56,7 @@ func (n *Node) valueOfDraw() *big.Int {
 
 	hashInt := new(big.Int).SetBytes(hash[:])
 
-	return val.Mul(hashInt, big.NewInt(getStake(n.Peer)))
+	return val.Mul(hashInt, big.NewInt(t.getStake(n.Peer)))
 }
 
 func (n *Node) hash() nodeHash {
@@ -81,13 +72,6 @@ func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	check(err)
 
 	return aesrsa.SignRSA(append(json1, json2...), sk)
-}
-
-func hashNode(n *Node) nodeHash {
-	json, err := json.Marshal(n)
-	check(err)
-
-	return sha256.Sum256(json)
 }
 
 func check(e error) {

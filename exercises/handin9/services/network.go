@@ -9,6 +9,7 @@ import (
 	. "../account"
 	"../aesrsa"
 	. "../peers"
+	bt "../blocktree"
 )
 
 // LocalPeer is the ID of the local machine
@@ -19,12 +20,12 @@ var PeerList = NewList()
 
 // InitNetwork preconfigures some basic properties of the network layer
 func InitNetwork() {
-	gob.Register(&SignedBlock{})
+	gob.Register(&SignedNode{})
 	gob.Register(&SignedTransaction{})
 }
 
 // ConnectToNetwork connects the local machine to a pre-existing network
-func ConnectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock, localPK aesrsa.RSAKey) {
+func ConnectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, localPK aesrsa.RSAKey) {
 	conn1, err := Connect(&peer)
 
 	if err != nil {
@@ -39,7 +40,7 @@ func ConnectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan
 }
 
 // CreateNetwork let the local machine create a p2p network
-func CreateNetwork(port int, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock, localPK aesrsa.RSAKey) {
+func CreateNetwork(port int, listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, localPK aesrsa.RSAKey) {
 	LocalPeer = GetLocalPeer(port, aesrsa.KeyToString(localPK))
 	PeerList.SortedInsert(&LocalPeer)
 	fmt.Println("Initializing your own network")
@@ -54,7 +55,7 @@ func Connect(peer *Peer) (net.Conn, error) {
 	return net.Dial("tcp", peer.GetAddress())
 }
 
-func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
+func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode) {
 	enc := gob.NewEncoder(conn)
 	dec := gob.NewDecoder(conn)
 
@@ -116,7 +117,7 @@ func getSequencer(dec *gob.Decoder) {
 }
 
 // BeServer let the local machine accept connections to the p2p network
-func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock, quitCh <-chan struct{}) {
+func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, quitCh <-chan struct{}) {
 	defer fmt.Println("server closed")
 	defer Wg.Done()
 
@@ -178,7 +179,7 @@ func checkAsk(conn net.Conn, sequencer aesrsa.RSAKey) (*Peer, bool) {
 	return &Peer{}, true
 }
 
-func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- SignedBlock) {
+func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode) {
 	defer Wg.Done()
 	defer peer.Close()
 
@@ -198,8 +199,8 @@ func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- Si
 			switch obj.WhatType() {
 			case "SignedTransaction":
 				listenCh <- *obj.(*SignedTransaction)
-			case "SignedBlock":
-				blockCh <- *obj.(*SignedBlock)
+			case "SignedNode":
+				blockCh <- *obj.(*bt.SignedNode)
 			}
 		}
 	}
