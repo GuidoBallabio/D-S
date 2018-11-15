@@ -21,10 +21,10 @@ func main() {
 	var (
 		keys = kingpin.Flag("keys", "Use predefined keys.").Short('k').String()
 		pw   = kingpin.Flag("password", "Password for the keys").Short('x').String()
+		dir  = kingpin.Flag("dir", "Directory for the founders' keys. (Must already exist)").Short('d').Default("founders").String()
 
 		server     = kingpin.Command("server", "Create your own network.")
 		portServer = server.Flag("port", "Port of server.").Short('p').Default("4444").Int()
-		dir        = server.Flag("dir", "Directory for the founders' keys. (Must already exist)").Short('d').Default("founders").String()
 
 		peer = kingpin.Command("peer", "Connect to a peer in a pre-existing network.")
 		ip   = peer.Arg("ip", "IP address of Peer.").Required().IP()
@@ -45,7 +45,7 @@ func main() {
 	switch cmd {
 	case "server":
 		serv.CreateNetwork(*portServer, listenCh, blockCh, localKeys.Public)
-		InitBlockChain(10, *dir)
+		GenerateFounders(10, *dir)
 	case "peer":
 		firstPeer := Peer{
 			IP:   ip.String(),
@@ -54,6 +54,7 @@ func main() {
 
 	}
 
+	InitBlockChain(*dir)
 	startServices(listenCh, blockCh)
 }
 
@@ -97,28 +98,41 @@ func initKeys(keys, pw string) {
 	fmt.Println(aesrsa.KeyToString(localKeys.Public))
 }
 
-// InitBlockChain make the necessary preparetions for the blockchain
-func InitBlockChain(n int, dir string) {
-	founders := GenerateFounders(n, dir)
-	tl := InitTransactions(founders)
-	serv.Tree = bt.NewTree(tl)
-}
-
-// GenerateFounders creates n founders' keys and returns the list of founders' public keys
-func GenerateFounders(n int, dir string) []string {
-	var founders = []string{}
-
+// GenerateFounders creates n founders' keys and and write the pairs and just the public in files
+func GenerateFounders(n int, dir string) {
 	for i := 0; i < n; i++ {
 		keys, err := aesrsa.KeyGen(2048)
 		if err != nil {
 			panic(err)
 		}
 
-		file := fmt.Sprintf(dir+"/"+"Keys - %d", i)
+		privFile := fmt.Sprintf(dir+"/"+"secret-%d.key", i)
 		pw := fmt.Sprintf("Password - %d", i)
-		aesrsa.StoreKeyPair(keys, file, pw)
+		aesrsa.StoreKeyPair(keys, privFile, pw)
 
-		founders = append(founders, aesrsa.KeyToString(keys.Public))
+		pubFile := fmt.Sprintf(dir+"/"+"founder-%d.cert", i)
+		pw2 := "nopassword"
+		aesrsa.StoreKey(keys.Public, pubFile, pw2)
+	}
+}
+
+// InitBlockChain make the necessary preparetions for the blockchain
+func InitBlockChain(dir string) {
+	founders := ReadPublicKeys(10, dir)
+	tl := InitTransactions(founders)
+	serv.Tree = bt.NewTree(tl)
+}
+
+// ReadPublicKeys returns the list of founders' public keys
+func ReadPublicKeys(n int, dir string) []string {
+	var founders = []string{}
+
+	for i := 0; i < n; i++ {
+
+		pubFile := fmt.Sprintf(dir+"/"+"founder-%d.cert", i)
+		key := aesrsa.ReadKey(pubFile, "nopassword")
+
+		founders = append(founders, aesrsa.KeyToString(*key))
 	}
 
 	return founders

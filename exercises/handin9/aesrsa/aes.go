@@ -117,6 +117,25 @@ func ReadKeyPair(file, pw string) *RSAKeyPair {
 	return res
 }
 
+// StoreKey writes a RSAKey to a file (encrypted)
+func StoreKey(keys RSAKey, file, pw string) {
+	pt, err := json.Marshal(keys)
+	check(err)
+
+	EncryptToFile(pt, file, pw)
+}
+
+// ReadKey retrieves a RSAKey from a file (decrypting it)
+func ReadKey(file, pw string) *RSAKey {
+	out := DecryptFromFile(file, pw)
+
+	res := &RSAKey{}
+	err := json.Unmarshal(out, &res)
+	check(err)
+
+	return res
+}
+
 // This two function below have been copied from https://github.com/go-web/tokenizer/blob/master/pkcs7.go
 // as is not a good idea to reinvent padding, especially in a cryptographic context
 
