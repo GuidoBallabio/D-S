@@ -164,6 +164,11 @@ func (t *Tree) GetLedger() string {
 	return t.ledger.String()
 }
 
+// GetAccountNumbers return the list ok pubkeys in the ledger
+func (t *Tree) GetAccountNumbers() []string {
+	return t.ledger.GetSortedKeys()
+}
+
 // GetCurrentSlot returns the current slot number
 func (t *Tree) GetCurrentSlot() uint64 {
 	return t.currentSlot

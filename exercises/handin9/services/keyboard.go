@@ -109,6 +109,7 @@ func scanKey(scanner *bufio.Scanner) string {
 	return key
 }
 
+/*
 func GatherKeys() []string {
 	p := []string{}
 	for peers := range PeerList.Iter() {
@@ -121,3 +122,4 @@ func GatherKeys() []string {
 
 	return l
 }
+*/
