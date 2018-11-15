@@ -2,6 +2,8 @@ package account
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"sync"
 )
 
@@ -27,11 +29,11 @@ func (l *Ledger) Transaction(t Transaction) {
 
 	if l.checkBalance(t) {
 		if !found {
-			l.Accounts[t.From] += t.Amount
-		} else {
-			l.Accounts[t.From] -= t.Amount
-			l.Accounts[t.To] += t.Amount
+			return
 		}
+
+		l.Accounts[t.From] -= t.Amount
+		l.Accounts[t.To] += t.Amount
 
 	}
 }
@@ -82,7 +84,44 @@ func (l *Ledger) String() string {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	return fmt.Sprintln(l.Accounts)
+	var s = ""
+	for key, value := range l.Accounts {
+		s = s + fmt.Sprintf("Key: "+key[20:29]+" | Value: "+strconv.Itoa(int(value))+"\n")
+	}
+
+	return s
+}
+
+// GetSortedKeys returns a sorted list of keys
+func (l *Ledger) GetSortedKeys() []string {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	type led = struct {
+		Key    string
+		Amount uint64
+	}
+
+	list := []led{}
+
+	for key, value := range l.Accounts {
+		ledg := led{
+			Key:    key,
+			Amount: value}
+		list = append(list, ledg)
+	}
+
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].Amount < list[j].Amount
+	})
+
+	var array []string
+
+	for i, j := range list {
+		array[i] = j.Key
+	}
+
+	return array
 }
 
 func check(e error) {

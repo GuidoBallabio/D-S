@@ -68,7 +68,7 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 		}
 
 		tmp, err = strconv.Atoi(amount)
-		intAmount = uint64(tmp)	
+		intAmount = uint64(tmp)
 	}
 
 	return Transaction{
@@ -107,4 +107,8 @@ func scanKey(scanner *bufio.Scanner) string {
 	key += "\n" + buf
 
 	return key
+}
+
+func GatherKeys() []string {
+
 }
