@@ -97,7 +97,7 @@ func (l *Ledger) String() string {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	var s = ""
+	s := ""
 	for key, value := range l.Accounts {
 		s = s + fmt.Sprintf("Key: "+key[20:29]+" | Value: "+strconv.Itoa(int(value))+"\n")
 	}

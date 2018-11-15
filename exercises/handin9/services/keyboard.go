@@ -10,6 +10,8 @@ import (
 	"../aesrsa"
 )
 
+var abbreviations map[string]string
+
 // Write handles the input from keyboard
 func Write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 	defer Wg.Done()
@@ -35,6 +37,8 @@ func Write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 }
 
 func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
+
+	printKeys()
 
 	from := scanKey(scanner)
 
@@ -78,39 +82,34 @@ func askTransaction(scanner *bufio.Scanner) (Transaction, bool) {
 }
 
 func scanKey(scanner *bufio.Scanner) string {
-	scanner.Scan()
-	buf := scanner.Text()
+	for {
+		scanner.Scan()
+		buf := scanner.Text()
 
-	for buf != "-----BEGIN KEY-----" {
 		if buf == "quit" {
 			return buf
 		}
-		scanner.Scan()
-		buf = scanner.Text()
-	}
 
-	key := buf + "\n"
+		val, found := abbreviations[buf]
 
-	scanner.Scan()
-	buf = scanner.Text()
-
-	for buf != "-----END KEY-----" {
-		if buf == "quit" {
-			return buf
+		if found {
+			return val
 		}
-		key += buf
 
-		scanner.Scan()
-		buf = scanner.Text()
+		fmt.Printf("Invalid key input! Please write a valide value")
 	}
-
-	key += "\n" + buf
-
-	return key
 }
 
-/*
-func GatherKeys() []string {
+func printKeys() {
+	populateAbbreviation()
+
+	for key, value := range abbreviations {
+		fmt.Printf("Key: " + key[20:29] + " | Value: " + value + "\n")
+	}
+}
+
+// GatherKeys returns all the pubkeys of the clients
+func gatherKeys() []string {
 	p := []string{}
 	for peers := range PeerList.Iter() {
 		p = append(p, peers.PubKey)
@@ -118,8 +117,16 @@ func GatherKeys() []string {
 
 	l := Tree.GetAccountNumbers()
 
-	l = append(l, p)
+	l = append(l, p...)
 
 	return l
 }
-*/
+
+// PopulateAbbreviation inserts the keys and their abbreviation in the abbreviation map
+func populateAbbreviation() {
+	p := gatherKeys()
+
+	for i, c := range p {
+		abbreviations[strconv.Itoa(i)] = c
+	}
+}
