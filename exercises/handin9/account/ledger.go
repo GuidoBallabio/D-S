@@ -135,9 +135,11 @@ func (l *Ledger) GetSortedKeys() []string {
 
 	array := []string{}
 
+	fmt.Println(list)
 	for _, j := range list {
 		array = append(array, j.Key)
 	}
+	fmt.Println(array)
 
 	return array
 }
