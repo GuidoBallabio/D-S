@@ -128,10 +128,10 @@ func (l *Ledger) GetSortedKeys() []string {
 		return list[i].Amount < list[j].Amount
 	})
 
-	var array []string
+	array := []string{}
 
-	for i, j := range list {
-		array[i] = j.Key
+	for _, j := range list {
+		array = append(array, j.Key)
 	}
 
 	return array

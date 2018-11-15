@@ -110,5 +110,14 @@ func scanKey(scanner *bufio.Scanner) string {
 }
 
 func GatherKeys() []string {
+	p := []string{}
+	for peers := range PeerList.Iter() {
+		p = append(p, peers.PubKey)
+	}
 
+	l := Tree.GetAccountNumbers()
+
+	l = append(l, p)
+
+	return l
 }
