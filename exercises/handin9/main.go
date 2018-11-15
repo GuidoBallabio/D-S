@@ -41,6 +41,17 @@ func main() {
 	fmt.Println(aesrsa.KeyToString(localKeys.Public))
 
 	serv.InitNetwork()
+
+	if *keys != "" && *pw != "" {
+		localKeys = aesrsa.ReadKeyPair(*keys, *pw)
+	} else {
+		var err error
+		localKeys, err = aesrsa.KeyGen(2048)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
 	listenCh := make(chan SignedTransaction)
 	blockCh := make(chan SignedBlock)
 
@@ -53,16 +64,6 @@ func main() {
 			IP:   ip.String(),
 			Port: *port}
 		serv.ConnectToNetwork(firstPeer, listenCh, blockCh, localKeys.Public)
-	}
-
-	if *keys != "" && *pw != "" {
-		localKeys = aesrsa.ReadKeyPair(*keys, *pw)
-	} else {
-		var err error
-		localKeys, err = aesrsa.KeyGen(2048)
-		if err != nil {
-			panic(err.Error())
-		}
 	}
 
 	startServices(listenCh, blockCh)
