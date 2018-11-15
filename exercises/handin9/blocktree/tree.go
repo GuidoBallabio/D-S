@@ -30,7 +30,7 @@ type Tree struct {
 	delivered *TransactionMap
 
 	// Received transactions to be processes
-	Received *TransactionMap
+	received *TransactionMap
 
 	// Head is the node considered the current top of the chain for the ledger, so head == leafs[0] until there is a rollback
 	head nodeHash
@@ -44,7 +44,7 @@ type Tree struct {
 	hardness *big.Int
 
 	// SlotLength is the time duration of the Slot
-	slotLength time.Duration
+	SlotLength time.Duration
 
 	// Reward is the reward for each node won
 	reward uint64
@@ -71,11 +71,11 @@ func NewTree(initTrans []Transaction) *Tree {
 		leafs:       []nodeHash{genHash},
 		currentSlot: gen.Slot,
 		delivered:   NewTransactionMap(),
-		Received:    NewTransactionMap(),
+		received:    NewTransactionMap(),
 		head:        genHash,
 		ledger:      NewLedger(),
 		hardness:    new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
-		slotLength:  1 * time.Second,
+		SlotLength:  1 * time.Second,
 		reward:      10,
 		fee:         1}
 
@@ -141,9 +141,32 @@ func (t *Tree) ConsiderLeaf(n *Node) bool {
 	return true
 }
 
-// ConsiderTransaction checks if a transaction is suitable for the head of this local machine
-func (t *Tree) ConsiderTransaction(tran Transaction) bool {
-	return t.ledger.CheckBalance(tran) //TODO check for applied received transactions
+// ConsiderTransaction adds it to the received set and returns if the transaction is suitable for the head of this local machine
+func (t *Tree) ConsiderTransaction(tran Transaction, seq []string) bool {
+	t.received.SetTransaction(tran)
+
+	tmpLedger := t.ledger.Copy()
+
+	for _, pTran := range seq {
+		val, _ := t.received.GetTransaction(pTran)
+		newTran, _ := t.deductFees(val)
+
+		// Apply transaction
+		t.ledger.Transaction(newTran)
+
+	}
+
+	return tmpLedger.CheckBalance(tran)
+}
+
+// GetLedger returns the current ledger status (to be printed)
+func (t *Tree) GetLedger() string {
+	return t.ledger.String()
+}
+
+// GetCurrentSlot returns the current slot number
+func (t *Tree) GetCurrentSlot() uint64 {
+	return t.currentSlot
 }
 
 // AddLeaf adds node to the correct position to the tree sorting the leafs as well
@@ -236,7 +259,7 @@ func (t *Tree) updateLedger() {
 		t.ledger = NewLedger()
 
 		// Reset delivered: delivered = empty, received = received U delivered
-		t.delivered.TransferAll(t.Received)
+		t.delivered.TransferAll(t.received)
 
 		for _, nh := range path {
 			t.applyAllTransactions(nh.getNode(t))
@@ -265,7 +288,7 @@ func (t *Tree) applyAllTransactions(node *Node) {
 	rewardPlusFees := t.reward
 
 	for _, id := range node.TransList {
-		tran, found := t.Received.GetTransaction(id)
+		tran, found := t.received.GetTransaction(id)
 		if found {
 			newTran, fee := t.deductFees(tran)
 
@@ -274,7 +297,7 @@ func (t *Tree) applyAllTransactions(node *Node) {
 			rewardPlusFees += fee
 
 			//Move from received to delivered
-			t.Received.RemoveID(id)
+			t.received.RemoveID(id)
 			t.delivered.SetTransaction(tran)
 		} else {
 			// wait and repeat? shouldn't happen

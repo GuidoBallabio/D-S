@@ -9,57 +9,75 @@ import (
 	bt "../blocktree"
 )
 
-var Tree *Tree
+// Tree is the blockchain tree
+var Tree *bt.Tree
 
-// processNodes implements the tree protocol
-func processNodes(sequencerCh <-chan Transaction, blockCh chan<- bt.SignedNode, keys aesrsa.RSAKeyPair, quitCh <-chan struct{}) {
+// ProcessNodes implements the tree protocol
+func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, keys *aesrsa.RSAKeyPair, quitCh <-chan struct{}) {
 	defer Wg.Done()
 
 	ticker := time.NewTicker(Tree.SlotLength)
-	seq := make([]Transaction, 0)
-
-	t.IncrementSlot()
-	var winner *Node
+	seq := make([]string, 0)
+	var winner *bt.Node
+	nodeOfSlot := map[*bt.Node]struct{}{}
 
 	for {
 		select {
-			case <-ticker.C:
-				if len(seq[:]) > 0 {
-						n := bt.NewNode(t.GetSeed(), t.CurrentSlot, seq, keys, t.GetHead())
-						t.IncrementSlot()
-						sn := bt.NewSignedNode(n, key.Private)
-						broadcastNode(*sn)
-						seq == make([]Transaction, 0)
+		case <-ticker.C:
+			Tree.IncrementSlot()
+			nodeOfSlot = map[*bt.Node]struct{}{}
 
-						winner = n
-				}
-
-				winner = nil
-
-			case t := <-sequencerCh: 
-				if Tree.ConsiderTransaction(t) {
-					seq = append(seq, t)
-				}
-			case n := <- blockCh:
-				if n := sn.Node; sn.VerifyNode() && Tree.CheckIfExist(n) {
-					pq.Push(b)
-					broadcastBlock(sb)
-					lastBlock = applyAllValidBlocks(pq, lastBlock)
-					fmt.Println(ledger) //TODO better print
-				}
-			case <-quitCh:
-				return //Done
+			// use winner for currentSlot-1
+			if winner != nil {
+				Tree.ConsiderLeaf(winner)
+				fmt.Println(Tree.GetLedger())
 			}
+
+			// make own node for current slot (just ended)
+			if len(seq[:]) > 0 {
+				n := bt.NewNode(Tree.GetSeed(), Tree.GetCurrentSlot(), seq, keys, Tree.GetHead())
+				sn := bt.NewSignedNode(*n, keys.Private)
+				go broadcastNode(*sn)
+				seq = make([]string, 0)
+
+				winner = n
+			} else {
+				winner = nil
+			}
+		case t := <-sequencerCh:
+			if Tree.ConsiderTransaction(t, seq) {
+				seq = append(seq, t.ID)
+			}
+		case sn := <-blockCh:
+			if n := &sn.Node; alreadySeen(n, nodeOfSlot) && Tree.CheckIsNext(n) && sn.VerifyNode() {
+				nodeOfSlot[n] = struct{}{}
+				if winner == nil || Tree.CompareValueOfNodes(n, winner) {
+					winner = n
+				}
+				go broadcastNode(sn)
+			}
+		case <-quitCh:
+			return //Done
 		}
 	}
 }
 
+func alreadySeen(n *bt.Node, nodeOfSlot map[*bt.Node]struct{}) bool {
+	_, found := nodeOfSlot[n]
+	return found
+}
+
 func broadcastNode(sn bt.SignedNode) {
+	Wg.Add(1)
+	defer Wg.Done()
+
 	var w WhatType = sn
 	for enc := range PeerList.IterEnc() {
 		enc.Encode(&w)
 	}
 }
+
+/*
 
 // ProcessBlocks applys blocks of transactions to the ledger
 func ProcessBlocks(blockCh <-chan SignedNode, quitCh <-chan struct{}) {
@@ -91,11 +109,6 @@ func ProcessBlocks(blockCh <-chan SignedNode, quitCh <-chan struct{}) {
 		}
 	}
 
-}
-
-// isFuture tells if it's already been processed
-func isFuture(n *Node) bool {
-	return Tree.CheckIfExist(n)
 }
 
 // Applys every transaction from a block
@@ -133,3 +146,4 @@ func broadcastBlock(sb SignedBlock) {
 		enc.Encode(&w)
 	}
 }
+*/

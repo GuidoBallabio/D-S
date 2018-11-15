@@ -21,7 +21,7 @@ type Node struct {
 }
 
 // NewNode given slot number and transactions
-func NewNode(seed, slot uint64, transList []string, keys aesrsa.RSAKeyPair, parent *Node) *Node {
+func NewNode(seed, slot uint64, transList []string, keys *aesrsa.RSAKeyPair, parent *Node) *Node {
 	return &Node{
 		Seed:      seed,
 		Slot:      slot,
