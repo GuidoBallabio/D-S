@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -45,7 +46,10 @@ func main() {
 	switch cmd {
 	case "server":
 		serv.CreateNetwork(*portServer, listenCh, blockCh, localKeys.Public)
-		GenerateFounders(10, *dir)
+		if _, err := os.Stat(*dir); err != nil && os.IsNotExist(err) {
+			os.Mkdir(*dir, 0755)
+			GenerateFounders(10, *dir)
+		}
 	case "peer":
 		firstPeer := Peer{
 			IP:   ip.String(),
@@ -65,7 +69,7 @@ func startServices(listenCh chan SignedTransaction, blockCh chan bt.SignedNode) 
 	serv.Wg.Add(1)
 	go serv.BeServer(listenCh, blockCh, quitCh)
 
-	wait.PollInfinite(time.Second*10, wait.ConditionFunc(func() (bool, error) {
+	wait.PollInfinite(time.Second*5, wait.ConditionFunc(func() (bool, error) {
 		return serv.PeerList.Length() > 1, nil
 	}))
 
@@ -106,9 +110,13 @@ func GenerateFounders(n int, dir string) {
 			panic(err)
 		}
 
-		privFile := fmt.Sprintf(dir+"/"+"secret-%d.key", i)
+		allFile := fmt.Sprintf(dir+"/"+"secret-%d.keys", i)
 		pw := fmt.Sprintf("Password - %d", i)
-		aesrsa.StoreKeyPair(keys, privFile, pw)
+		aesrsa.StoreKeyPair(keys, allFile, pw)
+
+		privFile := fmt.Sprintf(dir+"/"+"founder-%d.key", i)
+		pw1 := fmt.Sprintf("Password - %d", i)
+		aesrsa.StoreKey(keys.Private, privFile, pw1)
 
 		pubFile := fmt.Sprintf(dir+"/"+"founder-%d.cert", i)
 		pw2 := "nopassword"

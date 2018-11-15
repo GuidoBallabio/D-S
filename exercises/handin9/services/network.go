@@ -179,9 +179,9 @@ func handleConn(peer *Peer, listenCh chan<- SignedTransaction, blockCh chan<- bt
 	for {
 		var obj WhatType
 		err := dec.Decode(&obj)
+
 		if err != nil {
-			fmt.Println(err)
-			fmt.Println("Closed connection to", peer)
+			fmt.Println("Closed connection to", peer, "because of", err)
 			PeerList.Remove(peer)
 			break //Done
 		} else {
