@@ -38,24 +38,23 @@ func main() {
 
 	serv.InitNetwork()
 
-	initKeys(*keys, *pw)
-
 	listenCh := make(chan SignedTransaction)
 	blockCh := make(chan bt.SignedNode)
 
 	switch cmd {
 	case "server":
-		serv.CreateNetwork(*portServer, listenCh, blockCh, localKeys.Public)
 		if _, err := os.Stat(*dir); err != nil && os.IsNotExist(err) {
 			os.Mkdir(*dir, 0755)
 			GenerateFounders(10, *dir)
 		}
+		initKeys(*keys, *pw)
+		serv.CreateNetwork(*portServer, listenCh, blockCh, localKeys.Public)
 	case "peer":
 		firstPeer := Peer{
 			IP:   ip.String(),
 			Port: *port}
+		initKeys(*keys, *pw)
 		serv.ConnectToNetwork(firstPeer, listenCh, blockCh, localKeys.Public)
-
 	}
 
 	InitBlockChain(*dir)
@@ -111,11 +110,11 @@ func GenerateFounders(n int, dir string) {
 		}
 
 		allFile := fmt.Sprintf(dir+"/"+"secret-%d.keys", i)
-		pw := fmt.Sprintf("Password - %d", i)
+		pw := fmt.Sprintf("password-%d", i)
 		aesrsa.StoreKeyPair(keys, allFile, pw)
 
 		privFile := fmt.Sprintf(dir+"/"+"founder-%d.key", i)
-		pw1 := fmt.Sprintf("Password - %d", i)
+		pw1 := fmt.Sprintf("password-%d", i)
 		aesrsa.StoreKey(keys.Private, privFile, pw1)
 
 		pubFile := fmt.Sprintf(dir+"/"+"founder-%d.cert", i)

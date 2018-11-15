@@ -14,7 +14,7 @@ func (nh nodeHash) getNode(t *Tree) *Node { //maybe needs locks
 	return val
 }
 
-// GetNode gets a node given its hash
+// GetNode gets a node given its hash (must be in the tree)
 func (nh nodeHash) getParent(t *Tree) nodeHash {
 	return nh.getNode(t).Parent
 }

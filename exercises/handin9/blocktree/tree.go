@@ -177,7 +177,7 @@ func (t *Tree) GetCurrentSlot() uint64 {
 // AddLeaf adds node to the correct position to the tree sorting the leafs as well
 func (t *Tree) addLeaf(n *Node) {
 	nh := n.hash()
-	ph := nh.getParent(t)
+	ph := n.Parent
 
 	t.nodeSet[nh] = n
 
