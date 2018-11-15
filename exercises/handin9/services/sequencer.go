@@ -49,3 +49,4 @@ func broadcastNode(sn bt.SignedNode) {
 	for enc := range PeerList.IterEnc() {
 		enc.Encode(&w)
 	}
+}

@@ -24,6 +24,12 @@ func processNodes(sequencerCh <-chan Transaction, blockCh chan<- bt.SignedNode, 
 	for {
 		select {
 			case <-ticker.C:
+				// use winner for past slot
+				if winner != nil{
+					fmt.Println(ledger) //TODO better print
+				}
+
+				// make own node for past slot
 				if len(seq[:]) > 0 {
 						n := bt.NewNode(t.GetSeed(), t.CurrentSlot, seq, keys, t.GetHead())
 						t.IncrementSlot()
@@ -41,11 +47,10 @@ func processNodes(sequencerCh <-chan Transaction, blockCh chan<- bt.SignedNode, 
 					seq = append(seq, t)
 				}
 			case n := <- blockCh:
-				if n := sn.Node; sn.VerifyNode() && Tree.CheckIfExist(n) {
-					pq.Push(b)
-					broadcastBlock(sb)
+				if n := sn.Node; sn.VerifyNode() && isFuture(n) {
+					pq.Push(n)
+					broadcastBlock(sn)
 					lastBlock = applyAllValidBlocks(pq, lastBlock)
-					fmt.Println(ledger) //TODO better print
 				}
 			case <-quitCh:
 				return //Done
