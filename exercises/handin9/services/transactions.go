@@ -7,12 +7,10 @@ import (
 	. "../account"
 )
 
-// Wg is the waitgroup for the services
+// Wg is the waitgroup for all the services
 var Wg sync.WaitGroup
 
-var ledger = NewLedger()
 var past = NewPastMap()
-var inTransit = NewTransactionMap()
 
 // ProcessTransactions handles the trasaction recieved
 func ProcessTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- Transaction, quitCh <-chan struct{}) {
@@ -21,12 +19,10 @@ func ProcessTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 	for {
 		select {
 		case st := <-listenCh:
-			if t := st.ExtractTransaction(); !isOld(t) && isVerified(st) && ledger.CheckBalance(t) {
-				inTransit.AddTransaction(t)
+			if t := st.ExtractTransaction(); !isOld(t) && isVerified(st) {
+				Tree.Received.AddTransaction(t)
 				past.AddPast(t, true)
-				if CheckIfSequencer() {
-					sequencerCh <- t
-				}
+				sequencerCh <- t
 				broadcast(st)
 			}
 		case <-quitCh:

@@ -8,8 +8,8 @@ import (
 
 	. "../account"
 	"../aesrsa"
-	. "../peers"
 	bt "../blocktree"
+	. "../peers"
 )
 
 // LocalPeer is the ID of the local machine
@@ -62,8 +62,6 @@ func handleFirstConn(conn net.Conn, listenCh chan<- SignedTransaction, blockCh c
 	// asking for list of peers
 	signalAsk(enc)
 
-	getSequencer(dec)
-
 	p := &Peer{}
 	err := dec.Decode(p)
 	for p.Port != -1 {
@@ -103,17 +101,6 @@ func signalAsk(enc *gob.Encoder) {
 // signal not asking for list of peers
 func signalNoAsk(enc *gob.Encoder) {
 	enc.Encode(LocalPeer)
-}
-
-// getSequencer receive the sequencer's public key
-func getSequencer(dec *gob.Decoder) {
-	key := aesrsa.RSAKey{}
-	err := dec.Decode(&key)
-	if err != nil {
-		panic(err)
-	}
-
-	sequencer = key
 }
 
 // BeServer let the local machine accept connections to the p2p network
@@ -161,8 +148,6 @@ func checkAsk(conn net.Conn, sequencer aesrsa.RSAKey) (*Peer, bool) {
 	if err == nil {
 		if p.Port == -1 {
 			enc := gob.NewEncoder(conn)
-
-			enc.Encode(sequencer)
 
 			for p := range PeerList.Iter() {
 				enc.Encode(*p)

@@ -10,11 +10,27 @@ import (
 
 // Tree is the whole blockchain struct
 type Tree struct {
-	// NodeSet is the set of all nodes indexed by their hash
-	nodeSet map[nodeHash]*Node
+	//////////// ACTUAL TREE ////////////
 
 	// Genesis is the root of the tree
 	genesis nodeHash
+
+	// NodeSet is the set of all nodes indexed by their hash
+	nodeSet map[nodeHash]*Node
+
+	// Leafs is the array of the leafs of the tree sorted for descending longest path to the root
+	leafs []nodeHash
+
+	// CurrentSlot is the current slot number
+	currentSlot uint64
+
+	//////////// STATE ////////////
+
+	// Delivered transactions already accounted
+	delivered *TransactionMap
+
+	// Received transactions to be processes
+	Received *TransactionMap
 
 	// Head is the node considered the current top of the chain for the ledger, so head == leafs[0] until there is a rollback
 	head nodeHash
@@ -22,14 +38,19 @@ type Tree struct {
 	// Ledger: current state given by head
 	ledger *Ledger
 
-	// leafs is the array of the leafs of the tree sorted for descending longest path to the root
-	leafs []nodeHash
+	/////////// PARAMETERS ////////////
 
 	// Hardness is the number from which derives the probability of winning
 	hardness *big.Int
 
 	// SlotLength is the time duration of the Slot
 	slotLength time.Duration
+
+	// Reward is the reward for each node won
+	reward uint64
+
+	// Fee is the fee for each transaction payed to the peer who is responsible for its node
+	fee uint64
 
 	// lock for synchronization
 	lock sync.RWMutex
@@ -45,13 +66,18 @@ func NewTree(initTrans []Transaction) *Tree {
 	genHash := gen.hash()
 
 	tree := &Tree{
-		nodeSet:    map[nodeHash]*Node{},
-		genesis:    genHash,
-		head:       genHash,
-		ledger:     NewLedger(),
-		leafs:      []nodeHash{genHash},
-		hardness:   new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
-		slotLength: 1 * time.Second}
+		nodeSet:     map[nodeHash]*Node{},
+		genesis:     genHash,
+		leafs:       []nodeHash{genHash},
+		currentSlot: gen.Slot,
+		delivered:   NewTransactionMap(),
+		Received:    NewTransactionMap(),
+		head:        genHash,
+		ledger:      NewLedger(),
+		hardness:    new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
+		slotLength:  1 * time.Second,
+		reward:      10,
+		fee:         1}
 
 	tree.nodeSet[tree.genesis] = gen
 
@@ -82,6 +108,16 @@ func (t *Tree) GetSeed() uint64 { //maybe needs locks
 	return t.getNode(t.head).Seed
 }
 
+// GetHead returns
+func (t *Tree) GetHead() *Node {
+	return t.nodeSet[t.head]
+}
+
+// IncrementSlot let the next follow
+func (t *Tree) IncrementSlot() {
+	t.currentSlot++
+}
+
 // CheckIsNext returns true if the node can be considered for addition false if it could be a future one
 func (t *Tree) CheckIsNext(n *Node) bool {
 	return n.getParent(t) != nil
@@ -90,18 +126,24 @@ func (t *Tree) CheckIsNext(n *Node) bool {
 // ConsiderLeaf tries to add a node to the tree as leaf (hence should be the winner)
 // and return true if succeeds (the node should be discarded otherwise)
 func (t *Tree) ConsiderLeaf(n *Node) bool {
-	// Verify its consistency
 
+	// Verify its consistency
 	//// younger than parent
 	if n.Slot <= n.getParent(t).Slot {
 		return false
 	}
 
+	// add to tree
 	t.addLeaf(n)
+	// update state
 	t.updateLedger()
 
 	return true
+}
 
+// ConsiderTransaction checks if a transaction is suitable for the head of this local machine
+func (t *Tree) ConsiderTransaction(tran Transaction) bool {
+	return t.ledger.CheckBalance(tran) //TODO check for applied received transactions
 }
 
 // AddLeaf adds node to the correct position to the tree sorting the leafs as well
@@ -188,21 +230,58 @@ func (t *Tree) updateLedger() {
 	path, found := t.pathFromTo(t.head, t.leafs[0])
 
 	if !found {
+		// New path from root
 		path, _ = t.pathFromTo(t.genesis, t.leafs[0])
+		// Recreate ledger
 		t.ledger = NewLedger()
+
+		// Reset delivered: delivered = empty, received = received U delivered
+		t.delivered.TransferAll(t.Received)
 
 		for _, nh := range path {
 			t.applyAllTransactions(nh.getNode(t))
 		}
 
 	} else {
-		// skip head itself from being reapplied
+		// proced on usual from head to new leaf, skip head itself from being reapplied
 		for _, nh := range path[1:] {
 			t.applyAllTransactions(nh.getNode(t))
 		}
 	}
 
 	t.head = t.leafs[0]
+}
+
+// ApplyAllTransactions applies a node to the ledger and consider reward
+func (t *Tree) applyAllTransactions(node *Node) {
+
+	if node == t.nodeSet[t.genesis] {
+		for _, tran := range node.CreatedStake {
+			t.ledger.AddToBalance(tran.To, tran.Amount)
+		}
+		return
+	}
+
+	rewardPlusFees := t.reward
+
+	for _, id := range node.TransList {
+		tran, found := t.Received.GetTransaction(id)
+		if found {
+			newTran, fee := t.deductFees(tran)
+
+			// Apply transaction
+			t.ledger.Transaction(newTran)
+			rewardPlusFees += fee
+
+			//Move from received to delivered
+			t.Received.RemoveID(id)
+			t.delivered.SetTransaction(tran)
+		} else {
+			// wait and repeat? shouldn't happen
+		}
+	}
+
+	t.ledger.AddToBalance(node.Peer, rewardPlusFees)
 }
 
 // PathFromTo returns the path between two nodes if it exists otherwise (nil, false)
@@ -227,14 +306,10 @@ func (t *Tree) pathFromTo(from, to nodeHash) ([]nodeHash, bool) {
 	return nil, false
 }
 
-// ApplyAllTransactions applies a node to the ledger
-func (t *Tree) applyAllTransactions(node *Node) {
-	for _, tran := range node.TransList {
-		t.ledger.Transaction(tran)
-	}
-	for _, tran := range node.CreatedStake {
-		t.ledger.Transaction(tran)
-	}
+func (t *Tree) deductFees(tran Transaction) (Transaction, uint64) {
+	tran.Amount -= t.fee
+
+	return tran, t.fee
 }
 
 // GetNode gets a node given its hash

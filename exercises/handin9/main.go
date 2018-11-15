@@ -79,15 +79,11 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 		return serv.PeerList.Length() > 1, nil
 	}))
 
-	serv.Wg.Add(3)
+	serv.Wg.Add(4)
 	go serv.ProcessTransactions(listenCh, sequencerCh, quitCh)
 	go serv.ProcessBlocks(blockCh, quitCh)
 	go serv.Write(listenCh, quitCh)
-
-	if serv.CheckIfSequencer() {
-		serv.Wg.Add(1)
-		go serv.BeSequencer(sequencerCh, blockCh, quitCh)
-	}
+	go serv.BeSequencer(sequencerCh, blockCh, localKeys, quitCh)
 
 	<-quitCh
 	serv.Connect(&serv.LocalPeer)
@@ -100,7 +96,7 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 func InitBlockChain(n int, dir string) {
 	founders := GenerateFounders(n, dir)
 	tl := InitTransactions(founders)
-	bt.NewTree(tl)
+	serv.Tree = bt.NewTree(tl)
 }
 
 // GenerateFounders creates n founders' keys and returns the list of founders' public keys
