@@ -125,6 +125,11 @@ func (l *Ledger) GetSortedKeys() []string {
 	}
 
 	sort.SliceStable(list, func(i, j int) bool {
+
+		if list[i].Amount == list[j].Amount {
+			return list[i].Key < list[j].Key
+		}
+
 		return list[i].Amount < list[j].Amount
 	})
 
