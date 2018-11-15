@@ -35,25 +35,12 @@ func main() {
 
 	cmd := kingpin.Parse()
 
-	fmt.Println("Your secret key is:")
-	fmt.Println(aesrsa.KeyToString(localKeys.Private))
-	fmt.Println("Your public key is:")
-	fmt.Println(aesrsa.KeyToString(localKeys.Public))
-
 	serv.InitNetwork()
 
-	if *keys != "" && *pw != "" {
-		localKeys = aesrsa.ReadKeyPair(*keys, *pw)
-	} else {
-		var err error
-		localKeys, err = aesrsa.KeyGen(2048)
-		if err != nil {
-			panic(err.Error())
-		}
-	}
+	initKeys(*keys, *pw)
 
 	listenCh := make(chan SignedTransaction)
-	blockCh := make(chan SignedBlock)
+	blockCh := make(chan bt.SignedNode)
 
 	switch cmd {
 	case "server":
@@ -69,7 +56,7 @@ func main() {
 	startServices(listenCh, blockCh)
 }
 
-func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
+func startServices(listenCh chan SignedTransaction, blockCh chan bt.SignedNode) {
 	sequencerCh := make(chan Transaction)
 	quitCh := make(chan struct{})
 
@@ -80,11 +67,10 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 		return serv.PeerList.Length() > 1, nil
 	}))
 
-	serv.Wg.Add(4)
+	serv.Wg.Add(3)
 	go serv.ProcessTransactions(listenCh, sequencerCh, quitCh)
-	go serv.ProcessBlocks(blockCh, quitCh)
+	go serv.ProcessNodes(sequencerCh, blockCh, localKeys, quitCh)
 	go serv.Write(listenCh, quitCh)
-	go serv.BeSequencer(sequencerCh, blockCh, localKeys, quitCh)
 
 	<-quitCh
 	serv.Connect(&serv.LocalPeer)
@@ -92,6 +78,23 @@ func startServices(listenCh chan SignedTransaction, blockCh chan SignedBlock) {
 }
 
 /////////// Init Functions ///////////
+
+func initKeys(keys, pw string) {
+	if keys != "" && pw != "" {
+		localKeys = aesrsa.ReadKeyPair(keys, pw)
+	} else {
+		var err error
+		localKeys, err = aesrsa.KeyGen(2048)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
+	fmt.Println("Your secret key is:")
+	fmt.Println(aesrsa.KeyToString(localKeys.Private))
+	fmt.Println("Your public key is:")
+	fmt.Println(aesrsa.KeyToString(localKeys.Public))
+}
 
 // InitBlockChain make the necessary preparetions for the blockchain
 func InitBlockChain(n int, dir string) {

@@ -20,7 +20,9 @@ var PeerList = NewList()
 
 // InitNetwork preconfigures some basic properties of the network layer
 func InitNetwork() {
-	gob.Register(&SignedNode{})
+	//rand.Seed(time.Now().UnixNano()) in release (no determinism for test and development)
+
+	gob.Register(&bt.SignedNode{})
 	gob.Register(&SignedTransaction{})
 }
 
@@ -32,7 +34,7 @@ func ConnectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan
 		panic(err.Error())
 	}
 
-	LocalPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localPK))
+	LocalPeer = GetLocalPeer(peer.Port+ /*rand.Intn(100) for release*/ 1, aesrsa.KeyToString(localPK))
 	fmt.Println("Connection to the network Succesfull")
 	PeerList.SortedInsert(&LocalPeer)
 	handleFirstConn(conn1, listenCh, blockCh)
@@ -109,10 +111,12 @@ func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, q
 	defer Wg.Done()
 
 	ln, err := net.Listen("tcp", ":"+LocalPeer.GetPort())
-	if err != nil {
-		fmt.Println("Fatal server error")
-		panic(-1)
+
+	for err != nil {
+		fmt.Println("Trying new port to bind the server to.")
+		ln, err = net.Listen("tcp", ":"+string(LocalPeer.Port+1)) //only for development advertise itself with a different port
 	}
+
 	defer ln.Close()
 
 	for {
@@ -125,7 +129,7 @@ func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, q
 				return //Done
 			}
 		default:
-			if p, firstConn := checkAsk(conn, sequencer); !firstConn {
+			if p, firstConn := checkAsk(conn); !firstConn {
 				Wg.Add(1)
 				go handleConn(p, listenCh, blockCh)
 			}
@@ -141,7 +145,7 @@ func closeAllConn() {
 }
 
 // check if the peer asks for list of peers
-func checkAsk(conn net.Conn, sequencer aesrsa.RSAKey) (*Peer, bool) {
+func checkAsk(conn net.Conn) (*Peer, bool) {
 	dec := gob.NewDecoder(conn)
 	p := &Peer{}
 	err := dec.Decode(p)

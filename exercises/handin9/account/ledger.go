@@ -75,7 +75,20 @@ func (l *Ledger) AddToBalance(peer string, amount uint64) {
 	defer l.lock.Unlock()
 
 	l.Accounts[peer] += amount
+}
 
+// Copy returns a copy of the ledger, transactioon on the copy won't affect the original
+func (l *Ledger) Copy() *Ledger {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	c := NewLedger()
+
+	for k, v := range l.Accounts {
+		c.Accounts[k] = v
+	}
+
+	return c
 }
 
 func (l *Ledger) String() string {
