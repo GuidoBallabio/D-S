@@ -20,6 +20,8 @@ func Write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)
 
+	abbreviations = map[string]string{}
+
 	for {
 		t, quit := askTransaction(scanner)
 		if quit {
@@ -29,7 +31,7 @@ func Write(listenCh chan<- SignedTransaction, quitCh chan<- struct{}) {
 		}
 		t = attachNextID(t)
 		fmt.Println("Confirm with Secret Key")
-		key := aesrsa.KeyFromString(scanKey(scanner))
+		key := aesrsa.KeyFromString(scanPrivKey(scanner))
 		st := SignTransaction(t, key)
 		listenCh <- st
 		fmt.Println("Sent")
@@ -96,30 +98,18 @@ func scanKey(scanner *bufio.Scanner) string {
 			return val
 		}
 
-		fmt.Printf("Invalid key input! Please write a valide value")
+		fmt.Println("Invalid key input! Please write a valide value")
 	}
 }
 
 func printKeys() {
 	populateAbbreviation()
 
-	for key, value := range abbreviations {
-		fmt.Printf("Key: " + key[20:29] + " | Value: " + value + "\n")
+	l := len(abbreviations)
+
+	for i := 0; i < l; i++ {
+		fmt.Printf("Key: " + strconv.Itoa(i) + "\t| Value: " + abbreviations[strconv.Itoa(i)][30:39] + "\n")
 	}
-}
-
-// GatherKeys returns all the pubkeys of the clients
-func gatherKeys() []string {
-	p := []string{}
-	for peers := range PeerList.Iter() {
-		p = append(p, peers.PubKey)
-	}
-
-	l := Tree.GetAccountNumbers()
-
-	l = append(l, p...)
-
-	return l
 }
 
 // PopulateAbbreviation inserts the keys and their abbreviation in the abbreviation map
@@ -129,4 +119,59 @@ func populateAbbreviation() {
 	for i, c := range p {
 		abbreviations[strconv.Itoa(i)] = c
 	}
+}
+
+// GatherKeys returns all the pubkeys of the clients
+func gatherKeys() []string {
+	l := Tree.GetAccountNumbers()
+
+	for p := range PeerList.Iter() {
+
+		found := false
+
+		for _, p1 := range l {
+			if p1 == p.PubKey {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			l = append(l, p.PubKey)
+		}
+	}
+
+	return l
+}
+
+func scanPrivKey(scanner *bufio.Scanner) string {
+	scanner.Scan()
+	buf := scanner.Text()
+
+	for buf != "-----BEGIN KEY-----" {
+		if buf == "quit" {
+			return buf
+		}
+		scanner.Scan()
+		buf = scanner.Text()
+	}
+
+	key := buf + "\n"
+
+	scanner.Scan()
+	buf = scanner.Text()
+
+	for buf != "-----END KEY-----" {
+		if buf == "quit" {
+			return buf
+		}
+		key += buf
+
+		scanner.Scan()
+		buf = scanner.Text()
+	}
+
+	key += "\n" + buf
+
+	return key
 }
