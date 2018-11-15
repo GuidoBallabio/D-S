@@ -109,6 +109,8 @@ func scanKey(scanner *bufio.Scanner) string {
 	return key
 }
 
+/*
 func GatherKeys() []string {
 
 }
+*/

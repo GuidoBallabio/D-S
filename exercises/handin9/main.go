@@ -19,12 +19,12 @@ var localKeys *aesrsa.RSAKeyPair
 func main() {
 
 	var (
-		keys = kingpin.Flag("keys", "Use predefined keys").Short('k').String()
+		keys = kingpin.Flag("keys", "Use predefined keys.").Short('k').String()
 		pw   = kingpin.Flag("password", "Password for the keys").Short('x').String()
 
-		server     = kingpin.Command("server", "Create your own network")
+		server     = kingpin.Command("server", "Create your own network.")
 		portServer = server.Flag("port", "Port of server.").Short('p').Default("4444").Int()
-		dir        = server.Flag("dir", "Directory for the founders' keys").Short('d').Default("founders").String()
+		dir        = server.Flag("dir", "Directory for the founders' keys. (Must already exist)").Short('d').Default("founders").String()
 
 		peer = kingpin.Command("peer", "Connect to a peer in a pre-existing network.")
 		ip   = peer.Arg("ip", "IP address of Peer.").Required().IP()
@@ -51,6 +51,7 @@ func main() {
 			IP:   ip.String(),
 			Port: *port}
 		serv.ConnectToNetwork(firstPeer, listenCh, blockCh, localKeys.Public)
+
 	}
 
 	startServices(listenCh, blockCh)
@@ -113,7 +114,7 @@ func GenerateFounders(n int, dir string) []string {
 			panic(err)
 		}
 
-		file := fmt.Sprintf("Keys - %d", i)
+		file := fmt.Sprintf(dir+"/"+"Keys - %d", i)
 		pw := fmt.Sprintf("Password - %d", i)
 		aesrsa.StoreKeyPair(keys, file, pw)
 

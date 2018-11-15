@@ -17,6 +17,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 	defer Wg.Done()
 
 	ticker := time.NewTicker(Tree.SlotLength)
+
 	seq := make([]string, 0)
 	var winner *bt.Node
 	nodeOfSlot := map[*bt.Node]struct{}{}
