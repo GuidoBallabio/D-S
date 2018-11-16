@@ -22,9 +22,6 @@ type Tree struct {
 	// Leafs is the array of the leafs of the tree sorted for descending longest path to the root
 	leafs []nodeHash
 
-	// CurrentSlot is the current slot number
-	currentSlot uint64
-
 	//////////// STATE ////////////
 
 	// Delivered transactions already accounted
@@ -68,18 +65,17 @@ func NewTree(initTrans []Transaction) *Tree {
 	genHash := gen.hash()
 
 	tree := &Tree{
-		nodeSet:     map[nodeHash]*Node{},
-		genesis:     genHash,
-		leafs:       []nodeHash{genHash},
-		currentSlot: gen.Slot,
-		delivered:   NewTransactionMap(),
-		received:    NewTransactionMap(),
-		head:        genHash,
-		ledger:      NewLedger(),
-		hardness:    new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
-		SlotLength:  1 * time.Second,
-		reward:      10,
-		fee:         1}
+		nodeSet:    map[nodeHash]*Node{},
+		genesis:    genHash,
+		leafs:      []nodeHash{genHash},
+		delivered:  NewTransactionMap(),
+		received:   NewTransactionMap(),
+		head:       genHash,
+		ledger:     NewLedger(),
+		hardness:   new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
+		SlotLength: 1 * time.Second,
+		reward:     10,
+		fee:        1}
 
 	tree.nodeSet[tree.genesis] = gen
 
@@ -90,6 +86,8 @@ func NewTree(initTrans []Transaction) *Tree {
 
 // Partecipating returns true if the value of the draw on the local machine is higher than the Hardness
 func (t *Tree) Partecipating(node *Node) bool {
+	fmt.Println(node.valueOfDraw(t)) //TODO
+	fmt.Println(t.hardness)          //TODO
 	return node.valueOfDraw(t).Cmp(t.hardness) == 1
 }
 
@@ -113,11 +111,6 @@ func (t *Tree) GetSeed() uint64 { //maybe needs locks
 // GetHead returns
 func (t *Tree) GetHead() *Node {
 	return t.nodeSet[t.head]
-}
-
-// IncrementSlot let the next follow
-func (t *Tree) IncrementSlot() {
-	t.currentSlot++
 }
 
 // CheckIsNext returns true if the node can be considered for addition false if it could be a future one
@@ -173,7 +166,13 @@ func (t *Tree) GetAccountNumbers() []string {
 
 // GetCurrentSlot returns the current slot number
 func (t *Tree) GetCurrentSlot() uint64 {
-	return t.currentSlot
+	slot := time.Now().UnixNano() / int64(t.SlotLength)
+	return uint64(slot)
+}
+
+// BelongsToCurrentSlot checks if the node has current slot number
+func (t *Tree) BelongsToCurrentSlot(n *Node) bool {
+	return t.GetCurrentSlot() == n.Slot
 }
 
 // AddLeaf adds node to the correct position to the tree sorting the leafs as well

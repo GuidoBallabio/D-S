@@ -7,6 +7,7 @@ import (
 	. "../account"
 	"../aesrsa"
 	bt "../blocktree"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // Tree is the blockchain tree
@@ -16,27 +17,29 @@ var Tree *bt.Tree
 func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, keys *aesrsa.RSAKeyPair, quitCh <-chan struct{}) {
 	defer Wg.Done()
 
-	ticker := time.NewTicker(Tree.SlotLength)
-
 	seq := make([]string, 0)
 	var winner *bt.Node
 	nodeOfSlot := bt.NodeSet{}
 
+	timer := make(chan struct{})
+	go pollSlotNumber(timer, quitCh)
+
 	for {
 		select {
-		case <-ticker.C:
-			Tree.IncrementSlot()
+		case <-timer:
 			nodeOfSlot = bt.NodeSet{}
 
 			// use winner for currentSlot-1
 			if winner != nil {
-				fmt.Println("WINNERRRRRRRRRRRRRRRRRRRRR of slot", (*winner).Slot, "during", Tree.GetCurrentSlot())
+				fmt.Println("WINNER of slot", (*winner).Slot, "during", Tree.GetCurrentSlot()) //TODO
+				fmt.Println(winner.Peer[30:39])                                                //TODO
 				Tree.ConsiderLeaf(winner)
 				fmt.Println(Tree.GetLedger())
 				winner = nil
 			}
 
 			// make own node for current slot (just ended)
+			fmt.Println(seq) //TODO
 			if len(seq[:]) > 0 {
 				n := bt.NewNode(Tree.GetSeed(), Tree.GetCurrentSlot(), seq, keys, Tree.GetHead())
 				fmt.Println("WILL FOR SLOT?:", Tree.GetCurrentSlot()) //TODO
@@ -69,7 +72,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 
 func isNewSlot(n *bt.Node) bool {
 	fmt.Println("RECEIVED node of slot:", n.Slot, "during:", Tree.GetCurrentSlot()) //TODO should become ==
-	return n.Slot >= Tree.GetCurrentSlot()
+	return Tree.BelongsToCurrentSlot(n)
 }
 
 func alreadySeenInSlot(n *bt.Node, nodeOfSlot bt.NodeSet) bool {
@@ -85,5 +88,25 @@ func broadcastNode(sn bt.SignedNode) {
 	var w WhatType = sn
 	for enc := range PeerList.IterEnc() {
 		enc.Encode(&w)
+	}
+}
+
+func pollSlotNumber(timer chan<- struct{}, quitCh <-chan struct{}) {
+	Wg.Add(1)
+	defer Wg.Done()
+
+	oldSlot := Tree.GetCurrentSlot()
+	for {
+		select {
+		case <-quitCh:
+			return
+		default:
+			wait.PollInfinite(time.Millisecond*100, wait.ConditionFunc(func() (bool, error) {
+				return Tree.GetCurrentSlot() > oldSlot, nil
+			}))
+			oldSlot = Tree.GetCurrentSlot()
+
+			timer <- struct{}{}
+		}
 	}
 }
