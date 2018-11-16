@@ -39,7 +39,8 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 				Tree.ConsiderLeaf(winner)
 				fmt.Println(Tree.GetLedger())
 				winner = nil
-			} else { // if no winnerbut there were transaction then save them
+				oldSeq = make([]string, 0) // if there waas a winner ca as well forgot the oldSeq
+			} else { // if no winner but there were transaction then save them
 				if len(oldSeq[:]) > 0 {
 					seq = append(oldSeq, seq...)
 					oldSeq = make([]string, 0)
@@ -50,7 +51,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 			if len(seq[:]) > 0 {
 				n := bt.NewNode(Tree.GetSeed(), Tree.GetCurrentSlot(), seq, keys, Tree.GetHead())
 				fmt.Println("WILL FOR SLOT?:", Tree.GetCurrentSlot()) //TODO
-				if Tree.Partecipating(n) {                            //ALWAYS DOES....
+				if Tree.Partecipating(n) {
 					fmt.Println("PARTECIPATING FOR SLOT:", Tree.GetCurrentSlot()) //TODO
 					sn := bt.NewSignedNode(*n, keys.Private)
 					go broadcastNode(*sn)

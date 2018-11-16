@@ -72,7 +72,7 @@ func NewTree(initTrans []Transaction) *Tree {
 		received:   NewTransactionMap(),
 		head:       genHash,
 		ledger:     NewLedger(),
-		hardness:   new(big.Int).Exp(big.NewInt(2), big.NewInt(255-3), nil),
+		hardness:   new(big.Int).Exp(big.NewInt(2), big.NewInt(255+12), nil), //255 for the hash mean and 12 for the stake
 		SlotLength: 1 * time.Second,
 		reward:     10,
 		fee:        1}
