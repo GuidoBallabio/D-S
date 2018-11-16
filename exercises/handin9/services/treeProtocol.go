@@ -17,7 +17,9 @@ var Tree *bt.Tree
 func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, keys *aesrsa.RSAKeyPair, quitCh <-chan struct{}) {
 	defer Wg.Done()
 
+	oldSeq := make([]string, 0)
 	seq := make([]string, 0)
+
 	var winner *bt.Node
 	nodeOfSlot := bt.NodeSet{}
 
@@ -33,13 +35,18 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 			if winner != nil {
 				fmt.Println("WINNER of slot", (*winner).Slot, "during", Tree.GetCurrentSlot()) //TODO
 				fmt.Println(winner.Peer[30:39])                                                //TODO
+				fmt.Println(seq, oldSeq)                                                       //TODO
 				Tree.ConsiderLeaf(winner)
 				fmt.Println(Tree.GetLedger())
 				winner = nil
+			} else { // if no winnerbut there were transaction then save them
+				if len(oldSeq[:]) > 0 {
+					seq = append(oldSeq, seq...)
+					oldSeq = make([]string, 0)
+				}
 			}
 
 			// make own node for current slot (just ended)
-			fmt.Println(seq) //TODO
 			if len(seq[:]) > 0 {
 				n := bt.NewNode(Tree.GetSeed(), Tree.GetCurrentSlot(), seq, keys, Tree.GetHead())
 				fmt.Println("WILL FOR SLOT?:", Tree.GetCurrentSlot()) //TODO
@@ -50,8 +57,10 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 					winner = n
 					nodeOfSlot[bt.HashNode(n)] = struct{}{}
 				}
-				seq = make([]string, 0)
 			}
+			oldSeq = seq
+			seq = make([]string, 0)
+
 		case t := <-sequencerCh:
 			if Tree.ConsiderTransaction(t, seq) {
 				seq = append(seq, t.ID)
