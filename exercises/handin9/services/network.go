@@ -113,8 +113,9 @@ func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, q
 	ln, err := net.Listen("tcp", ":"+LocalPeer.GetPort())
 
 	for err != nil {
-		fmt.Println("Trying new port to bind the server to.")
-		ln, err = net.Listen("tcp", ":"+string(LocalPeer.Port+1)) //only for development advertise itself with a different port
+		LocalPeer.Port++
+		fmt.Println("Trying new port to bind the server to:", LocalPeer.GetPort())
+		ln, err = net.Listen("tcp", ":"+LocalPeer.GetPort()) //only for development advertise itself with a different port
 	}
 
 	defer ln.Close()

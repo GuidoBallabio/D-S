@@ -39,11 +39,9 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 				Tree.ConsiderLeaf(winner)
 				fmt.Println(Tree.GetLedger())
 				winner = nil
-				oldSeq = make([]string, 0) // if there waas a winner ca as well forgot the oldSeq
 			} else { // if no winner but there were transaction then save them
 				if len(oldSeq[:]) > 0 {
 					seq = append(oldSeq, seq...)
-					oldSeq = make([]string, 0)
 				}
 			}
 
@@ -63,7 +61,9 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 			seq = make([]string, 0)
 
 		case t := <-sequencerCh:
+			fmt.Println("CONSIDERING TRANSACTION:", t.ID)
 			if Tree.ConsiderTransaction(t, seq) {
+				fmt.Println("ADDING TRANSACTION:", t.ID)
 				seq = append(seq, t.ID)
 			}
 		case sn := <-blockCh:
@@ -81,7 +81,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 }
 
 func isNewSlot(n *bt.Node) bool {
-	fmt.Println("RECEIVED node of slot:", n.Slot, "during:", Tree.GetCurrentSlot()) //TODO should become ==
+	fmt.Println("RECEIVED node of slot:", n.Slot, "during:", Tree.GetCurrentSlot(), "from", n.Peer[30:39]) //TODO
 	return Tree.BelongsToCurrentSlot(n)
 }
 
