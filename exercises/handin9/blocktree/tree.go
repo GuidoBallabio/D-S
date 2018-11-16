@@ -137,6 +137,7 @@ func (t *Tree) ConsiderLeaf(n *Node) bool {
 }
 
 // ConsiderTransaction adds it to the received set and returns if the transaction is suitable for the head of this local machine
+// Shouldn't account for fees and  rewards
 func (t *Tree) ConsiderTransaction(tran Transaction, seq []string) bool {
 	t.received.SetTransaction(tran)
 
@@ -144,7 +145,7 @@ func (t *Tree) ConsiderTransaction(tran Transaction, seq []string) bool {
 
 	for _, pTran := range seq {
 		val, _ := t.received.GetTransaction(pTran)
-		newTran := t.deductFees(val)
+		newTran, _ := t.deductFees(val, "")
 
 		// Apply transaction
 		t.ledger.Transaction(newTran)
@@ -293,15 +294,13 @@ func (t *Tree) applyAllTransactions(node *Node) {
 		return
 	}
 
-	rewardPlusFees := t.reward
-
 	for _, id := range node.TransList {
 		tran, found := t.received.GetTransaction(id)
 		if found {
 			// Apply transaction, fees from receiver!
-			newTran := t.deductFees(tran)
+			newTran, feeTran := t.deductFees(tran, node.Peer)
 			t.ledger.Transaction(newTran)
-			rewardPlusFees += t.fee
+			t.ledger.Transaction(feeTran)
 
 			//Move from received to delivered
 			t.received.RemoveID(id)
@@ -312,7 +311,7 @@ func (t *Tree) applyAllTransactions(node *Node) {
 		}
 	}
 
-	t.ledger.AddToBalance(node.Peer, rewardPlusFees)
+	t.ledger.AddToBalance(node.Peer, t.reward)
 }
 
 // PathFromTo returns the path between two nodes (excluding from, including to, if equal its empty) if it exists otherwise (nil, false)
@@ -337,10 +336,13 @@ func (t *Tree) pathFromTo(from, to nodeHash) ([]nodeHash, bool) {
 	return nil, false
 }
 
-func (t *Tree) deductFees(tran Transaction) Transaction {
+func (t *Tree) deductFees(tran Transaction, miner string) (Transaction, Transaction) {
 	tran.Amount -= t.fee
 
-	return tran
+	return tran, Transaction{
+		From:   tran.From,
+		To:     miner,
+		Amount: t.fee}
 }
 
 // GetNode gets a node given its hash
