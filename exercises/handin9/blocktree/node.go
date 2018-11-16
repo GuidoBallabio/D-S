@@ -75,7 +75,7 @@ func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	return aesrsa.SignRSA(append(json1, json2...), sk)
 }
 
-func (n *Node) string(t *Tree) string { //TODO remove t
+func (n *Node) string(t *Tree) string {
 	s := ""
 	s += fmt.Sprintln("Slot:", n.Slot)
 	s += fmt.Sprintln("Peer:", n.Peer[30:39])

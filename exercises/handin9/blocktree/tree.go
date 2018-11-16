@@ -86,8 +86,7 @@ func NewTree(initTrans []Transaction) *Tree {
 
 // Partecipating returns true if the value of the draw on the local machine is higher than the Hardness
 func (t *Tree) Partecipating(node *Node) bool {
-	fmt.Println(node.valueOfDraw(t)) //TODO
-	fmt.Println(t.hardness)          //TODO
+
 	return node.valueOfDraw(t).Cmp(t.hardness) == 1
 }
 
@@ -306,7 +305,7 @@ func (t *Tree) applyAllTransactions(node *Node) {
 			t.received.RemoveID(id)
 			t.delivered.SetTransaction(tran)
 		} else {
-			fmt.Println("APPLY NOOOOOOOOOOOOOOOOOO") //TODO
+			//TODO
 			// wait and repeat? shouldn't happen
 		}
 	}

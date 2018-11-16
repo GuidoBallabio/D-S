@@ -33,9 +33,6 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 
 			// use winner for currentSlot-1
 			if winner != nil {
-				fmt.Println("WINNER of slot", (*winner).Slot, "during", Tree.GetCurrentSlot()) //TODO
-				fmt.Println(winner.Peer[30:39])                                                //TODO
-				fmt.Println(seq, oldSeq)                                                       //TODO
 				Tree.ConsiderLeaf(winner)
 				fmt.Println(Tree.GetLedger())
 				winner = nil
@@ -48,9 +45,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 			// make own node for current slot (just ended)
 			if len(seq[:]) > 0 {
 				n := bt.NewNode(Tree.GetSeed(), Tree.GetCurrentSlot(), seq, keys, Tree.GetHead())
-				fmt.Println("WILL FOR SLOT?:", Tree.GetCurrentSlot()) //TODO
 				if Tree.Partecipating(n) {
-					fmt.Println("PARTECIPATING FOR SLOT:", Tree.GetCurrentSlot()) //TODO
 					sn := bt.NewSignedNode(*n, keys.Private)
 					go broadcastNode(*sn)
 					winner = n
@@ -61,9 +56,7 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 			seq = make([]string, 0)
 
 		case t := <-sequencerCh:
-			fmt.Println("CONSIDERING TRANSACTION:", t.ID)
 			if Tree.ConsiderTransaction(t, seq) {
-				fmt.Println("ADDING TRANSACTION:", t.ID)
 				seq = append(seq, t.ID)
 			}
 		case sn := <-blockCh:
@@ -81,13 +74,11 @@ func ProcessNodes(sequencerCh <-chan Transaction, blockCh <-chan bt.SignedNode, 
 }
 
 func isNewSlot(n *bt.Node) bool {
-	fmt.Println("RECEIVED node of slot:", n.Slot, "during:", Tree.GetCurrentSlot(), "from", n.Peer[30:39]) //TODO
 	return Tree.BelongsToCurrentSlot(n)
 }
 
 func alreadySeenInSlot(n *bt.Node, nodeOfSlot bt.NodeSet) bool {
 	_, found := nodeOfSlot[bt.HashNode(n)]
-	fmt.Println("SEEN", found)
 	return found
 }
 
