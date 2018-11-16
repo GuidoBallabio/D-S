@@ -22,7 +22,7 @@ func ProcessTransactions(listenCh <-chan SignedTransaction, sequencerCh chan<- T
 			if t := st.ExtractTransaction(); !isOld(t) && isVerified(st) {
 				past.AddPast(t, true)
 				sequencerCh <- t
-				broadcast(st)
+				go broadcast(st)
 			}
 		case <-quitCh:
 			return //Done
@@ -48,6 +48,9 @@ func attachNextID(t Transaction) Transaction {
 }
 
 func broadcast(st SignedTransaction) {
+	Wg.Add(1)
+	defer Wg.Done()
+
 	var w WhatType = st
 	for enc := range PeerList.IterEnc() {
 		enc.Encode(&w)

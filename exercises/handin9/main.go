@@ -109,13 +109,9 @@ func GenerateFounders(n int, dir string) {
 			panic(err)
 		}
 
-		allFile := fmt.Sprintf(dir+"/"+"secret-%d.keys", i)
+		privFile := fmt.Sprintf(dir+"/"+"founder-%d.keys", i)
 		pw := fmt.Sprintf("password-%d", i)
-		aesrsa.StoreKeyPair(keys, allFile, pw)
-
-		privFile := fmt.Sprintf(dir+"/"+"founder-%d.key", i)
-		pw1 := fmt.Sprintf("password-%d", i)
-		aesrsa.StoreKey(keys.Private, privFile, pw1)
+		aesrsa.StoreKeyPair(keys, privFile, pw)
 
 		pubFile := fmt.Sprintf(dir+"/"+"founder-%d.cert", i)
 		pw2 := "nopassword"

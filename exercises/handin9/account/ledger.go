@@ -97,9 +97,10 @@ func (l *Ledger) String() string {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	s := ""
-	for key, value := range l.Accounts {
-		s = s + fmt.Sprintf("Key: "+key[20:29]+" | Value: "+strconv.Itoa(int(value))+"\n")
+	s := "\t\tLEDGER:\n"
+	for _, key := range l.GetSortedKeys() {
+		value := l.Accounts[key]
+		s = s + fmt.Sprintf("Account: "+key[30:39]+" | Value: "+strconv.Itoa(int(value))+"\n")
 	}
 
 	return s
@@ -127,19 +128,17 @@ func (l *Ledger) GetSortedKeys() []string {
 	sort.SliceStable(list, func(i, j int) bool {
 
 		if list[i].Amount == list[j].Amount {
-			return list[i].Key < list[j].Key
+			return list[i].Key > list[j].Key
 		}
 
-		return list[i].Amount < list[j].Amount
+		return list[i].Amount > list[j].Amount
 	})
 
 	array := []string{}
 
-	fmt.Println(list)
 	for _, j := range list {
 		array = append(array, j.Key)
 	}
-	fmt.Println(array)
 
 	return array
 }

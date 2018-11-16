@@ -3,6 +3,7 @@ package blocktree
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	. "../account"
@@ -59,11 +60,11 @@ func (n *Node) valueOfDraw(t *Tree) *big.Int {
 	return val.Mul(hashInt, big.NewInt(t.getStake(n.Peer)))
 }
 
-func (n *Node) hash() nodeHash {
-	return hashNode(n)
-}
+//utils
 
-// utils
+func (n *Node) hash() nodeHash {
+	return HashNode(n)
+}
 
 func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	json1, err := json.Marshal(slot)
@@ -72,6 +73,16 @@ func getDraw(slot, seed uint64, sk aesrsa.RSAKey) []byte {
 	check(err)
 
 	return aesrsa.SignRSA(append(json1, json2...), sk)
+}
+
+func (n *Node) string(t *Tree) string { //TODO remove t
+	s := ""
+	s += fmt.Sprintln("Slot:", n.Slot)
+	s += fmt.Sprintln("Peer:", n.Peer[30:39])
+	s += fmt.Sprintln("Parent:", n.Parent)
+	s += fmt.Sprint("Value:", n.valueOfDraw(t))
+
+	return s
 }
 
 func check(e error) {

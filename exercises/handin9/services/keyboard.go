@@ -108,7 +108,7 @@ func printKeys() {
 	l := len(abbreviations)
 
 	for i := 0; i < l; i++ {
-		fmt.Printf("Key: " + strconv.Itoa(i) + "\t| Value: " + abbreviations[strconv.Itoa(i)][30:39] + "\n")
+		fmt.Printf("Input: " + strconv.Itoa(i) + "\t| Account: " + abbreviations[strconv.Itoa(i)][30:39] + "\n")
 	}
 }
 

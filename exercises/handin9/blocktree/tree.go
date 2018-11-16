@@ -1,6 +1,7 @@
 package blocktree
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -61,6 +62,7 @@ func NewTree(initTrans []Transaction) *Tree {
 	gen := &Node{
 		Seed:         42, //for reproducibility is fixed in development
 		Slot:         0,
+		Peer:         "Genesis",
 		CreatedStake: initTrans}
 
 	genHash := gen.hash()
@@ -81,7 +83,7 @@ func NewTree(initTrans []Transaction) *Tree {
 
 	tree.nodeSet[tree.genesis] = gen
 
-	tree.updateLedger()
+	tree.applyAllTransactions(gen)
 
 	return tree
 }
@@ -149,7 +151,7 @@ func (t *Tree) ConsiderTransaction(tran Transaction, seq []string) bool {
 
 	for _, pTran := range seq {
 		val, _ := t.received.GetTransaction(pTran)
-		newTran, _ := t.deductFees(val)
+		newTran := t.deductFees(val)
 
 		// Apply transaction
 		t.ledger.Transaction(newTran)
@@ -254,12 +256,14 @@ func (t *Tree) getStake(peer string) int64 { //maybe needs locks
 }
 
 // UpdateLedger recreates ledger up to the current head
+// responsible for managin head
 func (t *Tree) updateLedger() {
 	path, found := t.pathFromTo(t.head, t.leafs[0])
 
 	if !found {
 		// New path from root
 		path, _ = t.pathFromTo(t.genesis, t.leafs[0])
+		path = append([]nodeHash{t.genesis}, path...)
 		// Recreate ledger
 		t.ledger = NewLedger()
 
@@ -272,7 +276,7 @@ func (t *Tree) updateLedger() {
 
 	} else {
 		// proced on usual from head to new leaf, skip head itself from being reapplied
-		for _, nh := range path[1:] {
+		for _, nh := range path {
 			t.applyAllTransactions(nh.getNode(t))
 		}
 	}
@@ -295,16 +299,16 @@ func (t *Tree) applyAllTransactions(node *Node) {
 	for _, id := range node.TransList {
 		tran, found := t.received.GetTransaction(id)
 		if found {
-			newTran, fee := t.deductFees(tran)
-
-			// Apply transaction
+			// Apply transaction, fees from receiver!
+			newTran := t.deductFees(tran)
 			t.ledger.Transaction(newTran)
-			rewardPlusFees += fee
+			rewardPlusFees += t.fee
 
 			//Move from received to delivered
 			t.received.RemoveID(id)
 			t.delivered.SetTransaction(tran)
 		} else {
+			fmt.Println("APPLY NOOOOOOOOOOOOOOOOOO") //TODO
 			// wait and repeat? shouldn't happen
 		}
 	}
@@ -312,32 +316,32 @@ func (t *Tree) applyAllTransactions(node *Node) {
 	t.ledger.AddToBalance(node.Peer, rewardPlusFees)
 }
 
-// PathFromTo returns the path between two nodes if it exists otherwise (nil, false)
+// PathFromTo returns the path between two nodes (excluding from, including to, if equal its empty) if it exists otherwise (nil, false)
 func (t *Tree) pathFromTo(from, to nodeHash) ([]nodeHash, bool) {
 	path := []nodeHash{}
 
-	end := false
-	found := false
+	end := eqH(to, t.genesis)
+	found := eqH(to, from)
 
 	for nh := to; !end && !found; nh = nh.getParent(t) {
 		path = append([]nodeHash{nh}, path...)
 
-		end = eqH(nh, t.genesis)
-		found = eqH(nh, from)
+		end = eqH(nh.getParent(t), t.genesis)
+		found = eqH(nh.getParent(t), from)
 	}
 
-	// found from or from == genesis hence found from
-	if found || (found == end) {
-		return append([]nodeHash{from}, path...), true
+	// found from before genesis' parent (nil)
+	if found {
+		return path, true
 	}
 
 	return nil, false
 }
 
-func (t *Tree) deductFees(tran Transaction) (Transaction, uint64) {
+func (t *Tree) deductFees(tran Transaction) Transaction {
 	tran.Amount -= t.fee
 
-	return tran, t.fee
+	return tran
 }
 
 // GetNode gets a node given its hash
@@ -348,4 +352,19 @@ func (t *Tree) getNode(nh nodeHash) *Node {
 // GetNode gets a node given its hash
 func (t *Tree) getParent(nh nodeHash) nodeHash {
 	return nh.getNode(t).Parent
+}
+
+func (t *Tree) String() string {
+	s := "Start of Tree\n"
+
+	for i, l := range t.leafs {
+		p, _ := t.pathFromTo(t.genesis, l)
+		s += fmt.Sprintln("Path to leaf:", i)
+		for _, nh := range p {
+			s += fmt.Sprintln(t.nodeSet[nh].string(t))
+		}
+	}
+	s += fmt.Sprint("End Of Tree")
+
+	return s
 }

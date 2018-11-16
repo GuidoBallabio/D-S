@@ -19,7 +19,8 @@ func (nh nodeHash) getParent(t *Tree) nodeHash {
 	return nh.getNode(t).Parent
 }
 
-func hashNode(n *Node) nodeHash {
+// HashNode hashes a node
+func HashNode(n *Node) nodeHash {
 	json, err := json.Marshal(n)
 	check(err)
 
@@ -29,3 +30,6 @@ func hashNode(n *Node) nodeHash {
 func eqH(nh1, nh2 nodeHash) bool {
 	return bytes.Equal(nh1[:], nh2[:])
 }
+
+// NodeSet is a type for set of nodes
+type NodeSet = map[nodeHash]struct{}
