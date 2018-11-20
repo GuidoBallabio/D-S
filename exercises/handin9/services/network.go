@@ -4,7 +4,9 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
+	"time"
 
 	. "../account"
 	"../aesrsa"
@@ -20,7 +22,7 @@ var PeerList = NewList()
 
 // InitNetwork preconfigures some basic properties of the network layer
 func InitNetwork() {
-	//rand.Seed(time.Now().UnixNano()) in release (no determinism for test and development)
+	rand.Seed(time.Now().UnixNano())
 
 	gob.Register(&bt.SignedNode{})
 	gob.Register(&SignedTransaction{})
@@ -34,7 +36,7 @@ func ConnectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan
 		panic(err.Error())
 	}
 
-	LocalPeer = GetLocalPeer(peer.Port+ /*rand.Intn(100) for release*/ 1, aesrsa.KeyToString(localPK))
+	LocalPeer = GetLocalPeer(peer.Port+rand.Intn(1000), aesrsa.KeyToString(localPK))
 	fmt.Println("Connection to the network Succesfull")
 	PeerList.SortedInsert(&LocalPeer)
 	handleFirstConn(conn1, listenCh, blockCh)
@@ -112,10 +114,9 @@ func BeServer(listenCh chan<- SignedTransaction, blockCh chan<- bt.SignedNode, q
 
 	ln, err := net.Listen("tcp", ":"+LocalPeer.GetPort())
 
-	for err != nil {
-		LocalPeer.Port++
-		fmt.Println("Trying new port to bind the server to:", LocalPeer.GetPort())
-		ln, err = net.Listen("tcp", ":"+LocalPeer.GetPort()) //only for development advertise itself with a different port
+	if err != nil {
+		fmt.Println("Fatal server error")
+		panic(-1)
 	}
 
 	defer ln.Close()

@@ -5,10 +5,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	. "./account"
 	"./aesrsa"
@@ -78,7 +80,8 @@ func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction) {
 	conn1, err := connect(peer)
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
-		localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
+		rand.Seed(time.Now().UnixNano())
+		localPeer = GetLocalPeer(peer.Port+rand.Intn(1000), aesrsa.KeyToString(localKeys.Public))
 		peersList.SortedInsert(localPeer)
 		handleFirstConn(conn1, listenCh)
 	} else {
@@ -155,6 +158,7 @@ func beServer(listenCh chan<- SignedTransaction, quitCh <-chan struct{}) {
 		fmt.Println("Fatal server error")
 		panic(-1)
 	}
+
 	defer ln.Close()
 
 	for {

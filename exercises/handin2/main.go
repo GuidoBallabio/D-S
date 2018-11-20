@@ -5,10 +5,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	. "./account"
 	. "./peers"
@@ -61,7 +63,8 @@ func connectToNetwork(peer Peer, listenCh chan<- Transaction) {
 	conn1, err := connect(peer)
 	if err == nil {
 		fmt.Println("Connection to the network Succesfull")
-		localPeer = GetLocalPeer(peer.Port + 1)
+		rand.Seed(time.Now().UnixNano())
+		localPeer = GetLocalPeer(peer.Port + rand.Intn(1000))
 		peersList.SortedInsert(localPeer)
 		handleFirstConn(conn1, listenCh) //remember to add to the list of peers
 	} else {
@@ -135,10 +138,13 @@ func beServer(listenCh chan<- Transaction, quitCh <-chan struct{}) {
 	defer fmt.Println("server closed")
 
 	ln, err := net.Listen("tcp", ":"+localPeer.GetPort())
-	if err != nil {
-		fmt.Println("Fatal server error")
-		panic(-1)
+
+	for err != nil {
+		localPeer.Port++
+		fmt.Println("Trying new port to bind the server to:", localPeer.GetPort())
+		ln, err = net.Listen("tcp", ":"+localPeer.GetPort()) //only for development advertise itself with a different port
 	}
+
 	defer ln.Close()
 
 	for {
