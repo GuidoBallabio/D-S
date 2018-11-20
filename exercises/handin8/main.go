@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -129,8 +130,8 @@ func connectToNetwork(peer Peer, listenCh chan<- SignedTransaction, blockCh chan
 	if err != nil {
 		panic(err.Error())
 	}
-
-	localPeer = GetLocalPeer(peer.Port+1, aesrsa.KeyToString(localKeys.Public))
+	rand.Seed(time.Now().UnixNano())
+	localPeer = GetLocalPeer(peer.Port+rand.Intn(1000), aesrsa.KeyToString(localKeys.Public))
 	fmt.Println("Connection to the network Succesfull")
 	peersList.SortedInsert(&localPeer)
 	handleFirstConn(conn1, listenCh, blockCh)

@@ -1,5 +1,5 @@
 Connection to the network Succesfull
-Your IP is: 10.42.0.1 with open port: 4445
+Your IP is: 10.42.0.1 with open port: 5286
 Connected to Peer: 10.42.0.1:4444
 Insert a transaction as: FromWho ToWho HowMuch each on different lines, then the private key to sign it 
 Confirm with Secret Key
@@ -2006,9 +2006,7 @@ map[-----BEGIN KEY-----
 MIHHAoHBALVxRs2LdUNxmGvaynisqmt/+PGY0qDjObkUYID1/rjVQS/J5ST5OG+Yf6UOK6ue4uIo6rRZNS7k/dQw6n4bbI705Q3ZkFhNBQB7n+/kfFQZRzabKJZvZ/moRGLGatRpsNXVwFHzBzaD0nibyXKBEwcPE8Ihu4+bfhnaRc7bNk08w5W9M6Xv/gwgrWGBdczCZUDaBgWprCXBMRH5ABW+vdlhDeyFmv0W3cjE6pUc7TLttuBrc4RjdmM+IqQhxnXcdwIBAw==
 -----END KEY-----:0 -----BEGIN KEY-----
 ACCOUNT_B
------END KEY-----:617 -----BEGIN KEY-----
+-----END KEY-----:591 -----BEGIN KEY-----
 ACCOUNT_C
------END KEY-----:383]
+-----END KEY-----:409]
 
-EOF
-Closed connection to Peer: 10.42.0.1:4444
